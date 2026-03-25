@@ -1,0 +1,50 @@
+
+C:\Users\user\Desktop\Life line\src\components\Charts.tsx
+   68:93   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   69:79   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  125:104  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:79   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  188:112  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  237:112  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  238:79   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  284:111  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\user\Desktop\Life line\src\context\AuthContext.tsx
+  119:14  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\user\Desktop\Life line\src\db\index.ts
+  113:9   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  114:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:9   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  122:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  138:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  145:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  153:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  154:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  170:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  180:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\user\Desktop\Life line\src\pages\AnalyticsPage.tsx
+  27:6  warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\user\Desktop\Life line\src\pages\DashboardPage.tsx
+  19:6  warning  React Hook useEffect has a missing dependency: 'loadDashboardData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\user\Desktop\Life line\src\pages\ExpensesPage.tsx
+  20:6  warning  React Hook useEffect has a missing dependency: 'loadExpenses'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\user\Desktop\Life line\src\pages\FeedingLogsPage.tsx
+  19:6  warning  React Hook useEffect has a missing dependency: 'loadLogs'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\user\Desktop\Life line\src\pages\MortalityLogsPage.tsx
+  19:6  warning  React Hook useEffect has a missing dependency: 'loadLogs'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\user\Desktop\Life line\src\services\dataService.ts
+  328:11  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  347:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\user\Desktop\Life line\src\services\supabaseService.ts
+  360:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 27 problems (22 errors, 5 warnings)
+
