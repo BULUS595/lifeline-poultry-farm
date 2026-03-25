@@ -21,29 +21,6 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Register Service Worker
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
-            .then((reg) => {
-              console.log('Service Worker registered:', reg);
-              // Check for updates periodically
-              setInterval(() => {
-                reg.update();
-              }, 60000); // Check every minute
-            })
-            .catch((error) => console.error('Service Worker registration failed:', error));
-        });
-
-        // Handle service worker updates
-        let refreshing = false;
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (refreshing) return;
-          refreshing = true;
-          window.location.reload();
-        });
-      }
-
       // Request notification permission
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
