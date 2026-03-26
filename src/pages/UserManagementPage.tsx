@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Users,
@@ -15,13 +14,15 @@ import {
     Key,
     ShieldCheck,
     Edit2,
-    Loader2
+    Loader2,
+    Lock,
+    UserCheck,
+    BadgeCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Layout } from '../components/Layout';
 import { adminService } from '../services/adminService';
 import type { User } from '../types';
-import styles from './UserManagementPage.module.css';
+import { Card, Button, Badge } from '../components/ui';
 
 export const UserManagementPage: React.FC = () => {
     const { user, isSuperAdmin, getRoleLabel } = useAuth();
@@ -30,7 +31,6 @@ export const UserManagementPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
-    // Modal states
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -49,15 +49,13 @@ export const UserManagementPage: React.FC = () => {
             const data = await adminService.getAllUsers();
             setUsers(data as User[]);
         } catch (err: any) {
-            setError(err?.message || 'Failed to authenticate and retrieve system users.');
+            setError(err?.message || 'Failed to retrieve system users');
         } finally {
             setIsLoading(false);
         }
     }, []);
 
-    useEffect(() => {
-        loadUsers();
-    }, [loadUsers]);
+    useEffect(() => { loadUsers(); }, [loadUsers]);
 
     const handleOpenCreate = () => {
         setIsEditMode(false);
@@ -69,28 +67,18 @@ export const UserManagementPage: React.FC = () => {
     const handleOpenEdit = (targetUser: User) => {
         setIsEditMode(true);
         setSelectedUserId(targetUser.id);
-        setFormData({
-            name: targetUser.name,
-            email: targetUser.email,
-            password: '', // Password not editable directly here for security
-            role: targetUser.role,
-        });
+        setFormData({ name: targetUser.name, email: targetUser.email, password: '', role: targetUser.role });
         setIsModalOpen(true);
     };
 
     const handleDelete = async (targetUser: User) => {
-        if (targetUser.id === user?.id) {
-            alert("Administrative restriction: You cannot delete your own session account.");
-            return;
-        }
-        const confirmDelete = window.confirm(`Permanently remove ${targetUser.name} from the system? This action is logged.`);
-        if (!confirmDelete) return;
-
+        if (targetUser.id === user?.id) return;
+        if (!window.confirm(`Permanently revoke access for ${targetUser.name}?`)) return;
         try {
             await adminService.deleteUser(targetUser.id);
             setUsers(users.filter(u => u.id !== targetUser.id));
         } catch (err: any) {
-            alert(`Resource Error: ${err?.message || 'Unknown collision'}`);
+            alert(err?.message || 'Deletion failed');
         }
     };
 
@@ -99,39 +87,27 @@ export const UserManagementPage: React.FC = () => {
         setIsSaving(true);
         try {
             if (isEditMode && selectedUserId) {
-                await adminService.updateUser(selectedUserId, {
-                    name: formData.name,
-                    role: formData.role,
-                });
+                await adminService.updateUser(selectedUserId, { name: formData.name, role: formData.role });
                 setUsers(users.map(u => u.id === selectedUserId ? { ...u, name: formData.name, role: formData.role as any } : u));
             } else {
-                const newUser = await adminService.createUser({
-                    name: formData.name,
-                    email: formData.email,
-                    password: formData.password || undefined,
-                    role: formData.role,
-                });
+                const newUser = await adminService.createUser({ name: formData.name, email: formData.email, password: formData.password || undefined, role: formData.role });
                 setUsers([newUser, ...users]);
             }
             setIsModalOpen(false);
         } catch (err: any) {
-            alert(`Execution Error: ${err?.message || 'Transaction failed'}`);
+            alert(err?.message || 'Transaction failed');
         } finally {
             setIsSaving(false);
         }
     };
 
-    if (!isSuperAdmin) {
-        return (
-            <Layout title="Permissions Locked">
-                <div className="card text-center" style={{ padding: '5rem 2rem' }}>
-                    <Shield size={48} color="var(--color-danger)" style={{ marginBottom: '1rem' }} />
-                    <h2>Unauthorized Access</h2>
-                    <p>Access to the personnel database is restricted to the Super Admin role.</p>
-                </div>
-            </Layout>
-        );
-    }
+    if (!isSuperAdmin) return (
+      <div className="h-[60vh] flex flex-col items-center justify-center opacity-50 space-y-4">
+         <div className="p-6 bg-rose-500/10 rounded-full text-rose-500"><Shield size={48} /></div>
+         <h2 className="text-2xl font-black uppercase tracking-tight italic">Root Restricted</h2>
+         <p className="max-w-xs text-center font-medium">User provisioning is restricted to the global super administrator.</p>
+      </div>
+    );
 
     const filteredUsers = users.filter(u =>
         u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -139,207 +115,137 @@ export const UserManagementPage: React.FC = () => {
     );
 
     return (
-        <Layout title="Personnel Management">
-            <div className={styles.container}>
-                <header className={styles.header}>
-                    <div className={styles.titleSection}>
-                        <h1>Operational <span style={{ color: 'var(--color-primary)' }}>Staffing</span></h1>
-                        <p className={styles.subtitle}>Directory showing personnel members • Authorized as {getRoleLabel()}</p>
-                    </div>
-                    <button className="btn-primary" onClick={handleOpenCreate} style={{ height: '48px', padding: '0 32px' }}>
-                        <UserPlus size={18} /> Provision User
-                    </button>
-                </header>
-
-                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        backgroundColor: 'var(--color-secondary)',
-                        padding: '0 16px',
-                        borderRadius: 'var(--radius-xl)',
-                        border: '1px solid var(--color-border)',
-                        width: '380px',
-                        height: '48px'
-                    }}>
-                        <Search size={18} style={{ color: 'var(--color-text-tertiary)' }} />
-                        <input
-                            type="text"
-                            placeholder="Find staff by identifier..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            style={{ background: 'none', border: 'none', color: 'var(--color-text)', outline: 'none', flex: 1, fontSize: '13px' }}
-                        />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-tertiary)', fontSize: '12px' }}>
-                        <ShieldCheck size={14} /> Global Records: <strong style={{ color: 'var(--color-text)' }}>{users.length}</strong>
-                    </div>
+        <div className="space-y-10 pb-20">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-end">
+                <div>
+                   <h1 className="text-4xl font-black tracking-tighter uppercase italic">Identity <span className="text-primary italic underline">Vault</span></h1>
+                   <p className="text-muted-foreground font-medium mt-1 uppercase text-[10px] tracking-widest opacity-60">Provision and manage farm operational personnel</p>
                 </div>
+                <Button size="lg" className="rounded-2xl px-8 shadow-glow" onClick={handleOpenCreate} leftIcon={UserPlus}>
+                   Provision Access
+                </Button>
+            </div>
 
-                {error ? (
-                    <div className="card" style={{ borderColor: 'var(--color-danger)', borderStyle: 'dashed' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--color-danger)' }}>
-                            <AlertCircle size={20} />
-                            <p style={{ margin: 0 }}>{error}</p>
-                        </div>
-                    </div>
-                ) : isLoading ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        {[...Array(5)].map((_, i) => (
-                            <div key={i} className="card" style={{ height: '80px', animation: 'pulse 2s infinite' }}></div>
-                        ))}
+            {/* Subheader / Search */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+                 <div className="relative w-full md:w-96">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                    <input type="text" placeholder="Find staff member..." className="w-full pl-11 pr-4 py-3 bg-card border border-border rounded-2xl focus:border-primary outline-none transition-all text-sm font-medium" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                 </div>
+                 <div className="flex items-center gap-2 bg-muted/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    <ShieldCheck size={14} className="text-primary" /> Active Profiles: {users.length}
+                 </div>
+            </div>
+
+            {/* List */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {isLoading ? (
+                    [1,2,3,4].map(i => <Card key={i} className="h-32 animate-pulse opacity-50" />)
+                ) : filteredUsers.length === 0 ? (
+                    <div className="col-span-full py-20 text-center opacity-20">
+                       <Users size={80} strokeWidth={1} className="mx-auto mb-4" />
+                       <p className="text-xs font-black uppercase tracking-widest italic">No personnel records detected</p>
                     </div>
                 ) : (
-                    <div className={`${styles.tableCard} card`}>
-                        <div className={styles.tableHeader}>
-                            <div>Staff Profile</div>
-                            <div>Internal Email</div>
-                            <div>Tier Role</div>
-                            <div>Created</div>
-                            <div style={{ textAlign: 'right' }}>Controls</div>
-                        </div>
-                        <div className={styles.tableBody}>
-                            {filteredUsers.length === 0 ? (
-                                <div style={{ padding: '5rem', textAlign: 'center', opacity: 0.3 }}>
-                                    <Users size={60} style={{ marginBottom: '1rem' }} />
-                                    <p>No active user profiles found.</p>
+                    filteredUsers.map(u => (
+                        <Card key={u.id} className="relative group hover:border-primary/30 transition-all overflow-hidden" noPadding>
+                            <div className="p-6 flex items-start gap-5">
+                                <div className="w-16 h-16 rounded-[24px] bg-primary/10 flex items-center justify-center text-primary shrink-0 group-hover:scale-110 transition-transform">
+                                   <UserCircle size={32} strokeWidth={2.5} />
                                 </div>
-                            ) : (
-                                filteredUsers.map(u => (
-                                    <div key={u.id} className={styles.tableRow}>
-                                        <div className={styles.colName}>
-                                            <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'var(--color-bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)' }}>
-                                                <UserCircle size={22} />
-                                            </div>
-                                            <div>
-                                                <div style={{ fontWeight: 800 }}>{u.name}</div>
-                                                {u.id === user?.id && <span className={styles.badgeYou}>CURRENT ACCOUNT</span>}
-                                            </div>
-                                        </div>
-                                        <div className={styles.colEmail}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <Mail size={12} style={{ opacity: 0.5 }} /> {u.email}
-                                            </div>
-                                        </div>
-                                        <div className={styles.colRole}>
-                                            <span className={`${styles.badge} ${styles['badge-' + u.role?.split('_')?.pop()]}`}>
-                                                {getRoleLabel(u.role)}
-                                            </span>
-                                        </div>
-                                        <div className={styles.colDate}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <Calendar size={12} style={{ opacity: 0.5 }} /> {new Date(u.createdAt || new Date()).toLocaleDateString()}
-                                            </div>
-                                        </div>
-                                        <div style={{ textAlign: 'right', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                                            <button className={styles.editBtn} onClick={() => handleOpenEdit(u)} title="Edit Profile">
-                                                <Edit2 size={16} />
-                                            </button>
-                                            <button
-                                                className={styles.deleteBtn}
-                                                onClick={() => handleDelete(u)}
-                                                disabled={u.id === user?.id}
-                                                title="Revoke Access"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* MODAL */}
-                {isModalOpen && (
-                    <div className={styles.modalOverlay}>
-                        <div className={styles.modalContent}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                                <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>
-                                    {isEditMode ? 'Modify Staff Record' : 'Provision New Identity'}
-                                </h2>
-                                <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer' }}><X size={24} /></button>
+                                <div className="flex-1 min-w-0 space-y-2">
+                                   <div className="flex justify-between items-start">
+                                      <div>
+                                         <h3 className="font-extrabold text-lg tracking-tight leading-none">{u.name}</h3>
+                                         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1 opacity-60 italic">{u.email}</p>
+                                      </div>
+                                      <Badge variant={u.role === 'super_admin' ? 'success' : 'default'} className="font-black text-[9px] uppercase tracking-widest">
+                                         {getRoleLabel(u.role)}
+                                      </Badge>
+                                   </div>
+                                   <div className="flex items-center gap-6 pt-2">
+                                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                                         <Calendar size={12} />
+                                         <span className="text-[9px] font-bold uppercase">{new Date(u.createdAt || '').toLocaleDateString()}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 text-emerald-500">
+                                         <UserCheck size={12} />
+                                         <span className="text-[9px] font-bold uppercase tracking-widest">Active Access</span>
+                                      </div>
+                                   </div>
+                                </div>
                             </div>
-
-                            <form onSubmit={handleSubmit}>
-                                <div className={styles.formGroup}>
-                                    <label><UserCircle size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> Full Identity Name</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g., Silas Okon"
-                                        value={formData.name}
-                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                        required
-                                        autoFocus
-                                    />
-                                </div>
-                                {!isEditMode && (
-                                    <>
-                                        <div className={styles.formGroup}>
-                                            <label><Mail size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> Operational Email</label>
-                                            <input
-                                                type="email"
-                                                placeholder="user@lifeline.com"
-                                                value={formData.email}
-                                                onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                                required
-                                            />
-                                        </div>
-                                        <div className={styles.formGroup}>
-                                            <label><Key size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> Initial Access Key</label>
-                                            <input
-                                                type="password"
-                                                placeholder="Min 6 characters"
-                                                value={formData.password}
-                                                onChange={e => setFormData({ ...formData, password: e.target.value })}
-                                                required
-                                            />
-                                        </div>
-                                    </>
-                                )}
-                                <div className={styles.formGroup}>
-                                    <label><Shield size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> Functional Priority Level</label>
-                                    <select
-                                        value={formData.role}
-                                        onChange={e => setFormData({ ...formData, role: e.target.value as any })}
-                                    >
-                                        <option value="super_admin">SUPER ADMIN (Full Access)</option>
-                                        <option value="manager">MANAGER (Analytics & Staff)</option>
-                                        <option value="sales_staff">SALES STAFF (Terminal Only)</option>
-                                        <option value="inventory_staff">INVENTORY STAFF (Stock Only)</option>
-                                        <option value="accountant">ACCOUNTANT (Financials)</option>
-                                        <option value="auditor">AUDITOR (Read-only Logs)</option>
-                                        <option value="worker">OPERATIONAL STAFF (Limited)</option>
-                                    </select>
-                                </div>
-
-                                <div className={styles.modalActions}>
-                                    <button
-                                        type="button"
-                                        className="btn-outline"
-                                        onClick={() => setIsModalOpen(false)}
-                                        disabled={isSaving}
-                                        style={{ width: '100%' }}
-                                    >
-                                        Abort
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="btn-primary"
-                                        disabled={isSaving}
-                                        style={{ width: '100%' }}
-                                    >
-                                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <>Commit Changes <CheckCircle2 size={18} /></>}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
+                            <div className="bg-muted/30 p-2 flex justify-end gap-2 border-t border-border/50">
+                               <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(u)} className="h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-primary"><Edit2 size={14} /></Button>
+                               {u.id !== user?.id && (
+                                 <Button variant="ghost" size="sm" onClick={() => handleDelete(u)} className="h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-rose-500"><Trash2 size={14} /></Button>
+                               )}
+                            </div>
+                            {u.id === user?.id && <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-bl-[40px] flex items-center justify-center text-primary pl-4 pb-4"><BadgeCheck size={16} /></div>}
+                        </Card>
+                    ))
                 )}
             </div>
-        </Layout>
+
+            {/* Modal */}
+            {isModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-fade-in">
+                    <Card className="w-full max-w-lg shadow-2xl rounded-[32px] overflow-hidden" noPadding title={isEditMode ? 'Modify Personnel' : 'Provision Identity'}>
+                        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                            <div className="space-y-4">
+                                <div className="space-y-1.5">
+                                   <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Full Identity Name</label>
+                                   <div className="relative group">
+                                      <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
+                                      <input type="text" required className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-bold text-sm transition-all" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="e.g. Silas Okon" />
+                                   </div>
+                                </div>
+                                
+                                {!isEditMode && (
+                                  <>
+                                    <div className="space-y-1.5">
+                                       <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Operational Email</label>
+                                       <div className="relative group">
+                                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
+                                          <input type="email" required className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-bold text-sm transition-all" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="staff@lifeline.com" />
+                                       </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                       <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Secure Passkey</label>
+                                       <div className="relative group">
+                                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
+                                          <input type="password" required className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-bold text-sm transition-all" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="••••••••" />
+                                       </div>
+                                    </div>
+                                  </>
+                                )}
+
+                                <div className="space-y-1.5">
+                                   <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Security Clearance Role</label>
+                                   <div className="relative group">
+                                      <Shield className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
+                                      <select className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-bold text-sm appearance-none cursor-pointer transition-all" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
+                                          <option value="super_admin">ROOT (Full System Access)</option>
+                                          <option value="manager">MANAGER (Ops & Analytics)</option>
+                                          <option value="sales_staff">SALES TERMINAL (Vending)</option>
+                                          <option value="inventory_staff">STORAGE CLERK (Stock)</option>
+                                          <option value="accountant">FISCAL AUDITOR (Finance)</option>
+                                          <option value="worker">OPERATIONAL (Limited)</option>
+                                      </select>
+                                   </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                               <Button variant="outline" className="flex-1 rounded-2xl py-6" onClick={() => setIsModalOpen(false)}>Abort</Button>
+                               <Button type="submit" className="flex-1 rounded-2xl py-6 shadow-glow" disabled={isSaving} leftIcon={isSaving ? Loader2 : CheckCircle2}>{isSaving ? 'Processing...' : 'Provision Access'}</Button>
+                            </div>
+                        </form>
+                    </Card>
+                </div>
+            )}
+        </div>
     );
 };
 

@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { Skeleton } from './components/Skeleton';
-import styles from './App.module.css';
+import { DashboardLayout } from './layouts/DashboardLayout';
 
 // Lazy loading all pages
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -22,11 +22,11 @@ const SalesRecordsPage = lazy(() => import('./pages/SalesRecordsPage').then(m =>
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
 
 const PageLoader = () => (
-  <div className={styles.loading}>
-    <div className="spinner"></div>
-    <p>Preparing view...</p>
-    <div style={{ width: '300px', marginTop: '20px' }}>
-      <Skeleton height={20} borderRadius={10} />
+  <div className="flex flex-col items-center justify-center min-h-screen bg-background">
+    <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+    <p className="text-muted-foreground font-medium animate-pulse">Life-Line is preparing your view...</p>
+    <div className="w-64 mt-6">
+      <Skeleton height={8} borderRadius={4} />
     </div>
   </div>
 );
@@ -35,18 +35,14 @@ const PageLoader = () => (
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: string[];
+  useLayout?: boolean;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles, useLayout = true }) => {
   const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className={styles.loading}>
-        <div className="spinner"></div>
-        <p>Loading...</p>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!isAuthenticated) {
@@ -58,7 +54,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     return <Navigate to="/" replace />;
   }
 
-  return <>{children}</>;
+  return useLayout ? <DashboardLayout>{children}</DashboardLayout> : <>{children}</>;
 };
 
 // Route wrappers with parameter extraction
@@ -231,3 +227,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+

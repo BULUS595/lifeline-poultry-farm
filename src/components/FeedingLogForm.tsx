@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { supabaseDataService } from '../services/supabaseService';
 import type { FeedingLog } from '../types';
-import styles from './FeedingLogForm.module.css';
+import { Button } from './ui';
+import { Calendar, Clock, Utensils, Package, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface FeedingLogFormProps {
   farmId: string;
@@ -30,14 +31,8 @@ export const FeedingLogForm: React.FC<FeedingLogFormProps> = ({
   const [success, setSuccess] = useState(false);
 
   const feedTypes = [
-    'Standard Mix',
-    'Premium Mix',
-    'Starter Feed',
-    'Grower Feed',
-    'Layer Feed',
-    'Broiler Feed',
-    'Special Diet',
-    'Supplements',
+    'Standard Mix', 'Premium Mix', 'Starter Feed', 'Grower Feed',
+    'Layer Feed', 'Broiler Feed', 'Special Diet', 'Supplements',
   ];
 
   const units = ['kg', 'lbs', 'bags', 'liters'];
@@ -54,150 +49,85 @@ export const FeedingLogForm: React.FC<FeedingLogFormProps> = ({
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       const log = await supabaseDataService.addFeedingLog({
-        farmId,
-        workerId,
-        date: formData.date,
-        time: formData.time,
-        quantity: formData.quantity,
-        unit: formData.unit as 'kg' | 'lbs' | 'bags' | 'liters',
-        feedType: formData.feedType,
-        notes: formData.notes,
+        farmId, workerId, date: formData.date, time: formData.time,
+        quantity: formData.quantity, unit: formData.unit as any,
+        feedType: formData.feedType, notes: formData.notes,
       });
-
       setSuccess(true);
-      setFormData({
-        date: new Date().toISOString().split('T')[0],
-        time: '08:00',
-        quantity: 50,
-        unit: 'kg',
-        feedType: 'Standard Mix',
-        notes: '',
-      });
-
-      setTimeout(() => {
-        setSuccess(false);
-      }, 3000);
-
+      setTimeout(() => setSuccess(false), 3000);
       onSubmit?.(log);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add feeding log');
-      console.error('Error:', err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className={styles.formContainer}>
-      <h2>Record Feeding</h2>
+    <div className="space-y-6">
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-500 text-sm font-bold italic">
+          <AlertCircle size={18} /> {error}
+        </div>
+      )}
+      {success && (
+        <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-500 text-sm font-bold italic">
+          <CheckCircle2 size={18} /> Feeding log recorded successfully!
+        </div>
+      )}
 
-      {error && <div className={styles.error}>{error}</div>}
-      {success && <div className={styles.success}>✓ Feeding log recorded successfully!</div>}
-
-      <form onSubmit={handleSubmit} className={styles.form}>
-        <div className={styles.formGroup}>
-          <label htmlFor="date">Date</label>
-          <input
-            type="date"
-            id="date"
-            name="date"
-            value={formData.date}
-            onChange={handleChange}
-            required
-          />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+           <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Date</label>
+              <div className="relative group">
+                 <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
+                 <input type="date" name="date" required className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-bold text-sm" value={formData.date} onChange={handleChange} />
+              </div>
+           </div>
+           <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Time</label>
+              <div className="relative group">
+                 <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
+                 <input type="time" name="time" required className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-bold text-sm" value={formData.time} onChange={handleChange} />
+              </div>
+           </div>
+           <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Quantity</label>
+              <div className="relative group">
+                 <Utensils className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
+                 <input type="number" name="quantity" min="0.1" step="0.1" required className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-black text-sm" value={formData.quantity} onChange={handleChange} />
+              </div>
+           </div>
+           <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Measurement Unit</label>
+              <select name="unit" required className="w-full px-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-bold text-sm appearance-none cursor-pointer" value={formData.unit} onChange={handleChange}>
+                 {units.map(u => <option key={u} value={u}>{u.toUpperCase()}</option>)}
+              </select>
+           </div>
+           <div className="space-y-1.5 md:col-span-2">
+              <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Resource SKU (Feed Type)</label>
+              <div className="relative group">
+                 <Package className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
+                 <select name="feedType" required className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-bold text-sm appearance-none cursor-pointer" value={formData.feedType} onChange={handleChange}>
+                    {feedTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                 </select>
+              </div>
+           </div>
+           <div className="space-y-1.5 md:col-span-2">
+              <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Observation Narrative</label>
+              <div className="relative group">
+                 <FileText className="absolute left-4 top-4 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
+                 <textarea name="notes" rows={3} className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-medium text-sm" value={formData.notes} onChange={handleChange} placeholder="Any specific observations..." />
+              </div>
+           </div>
         </div>
 
-        <div className={styles.formGroup}>
-          <label htmlFor="time">Time</label>
-          <input
-            type="time"
-            id="time"
-            name="time"
-            value={formData.time}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
-        <div className={styles.formRow}>
-          <div className={styles.formGroup}>
-            <label htmlFor="quantity">Quantity</label>
-            <input
-              type="number"
-              id="quantity"
-              name="quantity"
-              min="0.1"
-              step="0.1"
-              value={formData.quantity}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className={styles.formGroup}>
-            <label htmlFor="unit">Unit</label>
-            <select
-              id="unit"
-              name="unit"
-              value={formData.unit}
-              onChange={handleChange}
-              required
-            >
-              {units.map(unit => (
-                <option key={unit} value={unit}>
-                  {unit}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="feedType">Feed Type</label>
-          <select
-            id="feedType"
-            name="feedType"
-            value={formData.feedType}
-            onChange={handleChange}
-            required
-          >
-            {feedTypes.map(type => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className={styles.formGroup}>
-          <label htmlFor="notes">Notes (Optional)</label>
-          <textarea
-            id="notes"
-            name="notes"
-            rows={3}
-            value={formData.notes}
-            onChange={handleChange}
-            placeholder="Any observations about feeding..."
-          />
-        </div>
-
-        <div className={styles.buttonGroup}>
-          <button type="submit" className={styles.buttonPrimary} disabled={loading}>
-            {loading ? 'Recording...' : 'Record Feeding'}
-          </button>
-          {onCancel && (
-            <button
-              type="button"
-              className={styles.buttonSecondary}
-              onClick={onCancel}
-              disabled={loading}
-            >
-              Cancel
-            </button>
-          )}
+        <div className="flex gap-4">
+          <Button type="submit" className="flex-1 rounded-2xl py-6 shadow-glow font-black tracking-tight" disabled={loading}>{loading ? 'Recording...' : 'Commit Data'}</Button>
+          {onCancel && <Button type="button" variant="outline" className="flex-1 rounded-2xl py-6" onClick={onCancel} disabled={loading}>Discard</Button>}
         </div>
       </form>
     </div>

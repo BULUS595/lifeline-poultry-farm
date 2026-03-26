@@ -12,14 +12,18 @@ import {
     ShoppingCart,
     Package,
     Wallet,
-    AlertCircle
+    AlertCircle,
+    Activity,
+    ShieldCheck,
+    Terminal,
+    Fingerprint,
+    RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Layout } from '../components/Layout';
 import { Skeleton } from '../components/Skeleton';
 import { supabase } from '../services/supabaseService';
 import { type ActivityLog as ActivityLogType } from '../types';
-import styles from './ActivityLogsPage.module.css';
+import { Card, Button, Badge } from '../components/ui';
 
 export const ActivityLogsPage: React.FC = () => {
     const { isSuperAdmin, isManager, isAuditor } = useAuth();
@@ -34,28 +38,14 @@ export const ActivityLogsPage: React.FC = () => {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-
     const loadLogs = useCallback(async () => {
         setIsLoading(true);
         try {
             const { data, error } = await supabase
                 .from('activity_logs')
-                .select(`
-                    id,
-                    userId:user_id,
-                    userName:user_name,
-                    farmId:farm_id,
-                    action,
-                    dataType:data_type,
-                    dataId:data_id,
-                    details,
-                    previousState:previous_state,
-                    isDeleted:is_deleted,
-                    timestamp
-                `)
+                .select(`id, userId:user_id, userName:user_name, farmId:farm_id, action, dataType:data_type, dataId:data_id, details, previousState:previous_state, isDeleted:is_deleted, timestamp`)
                 .order('timestamp', { ascending: false })
                 .limit(100);
-
             if (error) throw error;
             setLogs(data as ActivityLogType[] || []);
         } catch (err) {
@@ -65,195 +55,132 @@ export const ActivityLogsPage: React.FC = () => {
         }
     }, []);
 
-    useEffect(() => {
-        loadLogs();
-    }, [loadLogs]);
+    useEffect(() => { loadLogs(); }, [loadLogs]);
 
     const getActionIcon = (log: ActivityLogType) => {
-        if (log.isDeleted) return <Trash2 size={18} />;
-
+        if (log.isDeleted) return <Trash2 size={16} />;
         switch (log.dataType) {
-            case 'sale': return <ShoppingCart size={18} />;
-            case 'storage': return <Package size={18} />;
-            case 'expense': return <Wallet size={18} />;
-            case 'user': return <UserIcon size={18} />;
-            case 'mortality': return <TrendingDown size={18} />;
-            default: return <Database size={18} />;
+            case 'sale': return <ShoppingCart size={16} />;
+            case 'storage': return <Package size={16} />;
+            case 'expense': return <Wallet size={16} />;
+            case 'user': return <UserIcon size={16} />;
+            case 'mortality': return <TrendingDown size={16} />;
+            default: return <Activity size={16} />;
         }
     };
 
-    const getActionLabel = (action: string) => {
-        return action.replace(/_/g, ' ').toLowerCase();
-    };
-
-    if (!isSuperAdmin && !isManager && !isAuditor) {
-        return (
-            <Layout title="Activity Logs Restricted">
-                <div className="card text-center" style={{ padding: '5rem 2rem' }}>
-                    <AlertCircle size={48} color="var(--color-danger)" style={{ marginBottom: '1rem' }} />
-                    <h2>Access Denied</h2>
-                    <p>Only system administrators, managers, and authorized auditors can view the comprehensive activity terminal.</p>
-                </div>
-            </Layout>
-        );
-    }
+    if (!isSuperAdmin && !isManager && !isAuditor) return (
+      <div className="h-[60vh] flex flex-col items-center justify-center opacity-50 space-y-4">
+         <div className="p-6 bg-rose-500/10 rounded-full text-rose-500"><ShieldCheck size={48} /></div>
+         <h2 className="text-2xl font-black uppercase tracking-tight italic">Security Restriction</h2>
+         <p className="max-w-xs text-center font-medium">Global audit logs are restricted to authorized security personnel.</p>
+      </div>
+    );
 
     const filteredLogs = useMemo(() => logs.filter(log =>
-        log.action?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        log.userName?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        log.dataType?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        log.details?.toLowerCase().includes(debouncedSearch.toLowerCase())
+        (log.action || '').toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        (log.userName || '').toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        (log.details || '').toLowerCase().includes(debouncedSearch.toLowerCase())
     ), [logs, debouncedSearch]);
 
-
     return (
-        <Layout title="Audit Terminal">
-            <div className={styles.container}>
-                <div className={styles.header}>
-                    <div className={styles.titleArea}>
-                        <h1>System Audit <span style={{ color: 'var(--color-primary)' }}>Trail</span></h1>
-                        <p>Forensic tracking of all operational transactions and configuration changes.</p>
-                    </div>
-                    <div className={styles.headerActions}>
-                        <div className={styles.searchBar}>
-                            <Search size={18} />
-                            <input
-                                type="text"
-                                placeholder="Filter by keyword, user, or entity..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                            />
-                        </div>
-                        <button className={styles.filterBtn} onClick={loadLogs} title="Refresh Logs">
-                            <History size={18} />
-                        </button>
-                    </div>
+        <div className="space-y-10 pb-20">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-end">
+                <div>
+                   <h1 className="text-4xl font-black tracking-tighter uppercase italic">Audit <span className="text-primary italic underline">Terminal</span></h1>
+                   <p className="text-muted-foreground font-medium mt-1 uppercase text-[10px] tracking-widest opacity-60">Forensic tracking of all operational events</p>
                 </div>
+                <div className="flex items-center gap-3">
+                   <div className="relative w-full md:w-72">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                      <input type="text" placeholder="Search audit trail..." className="w-full pl-11 pr-4 py-2.5 bg-card border border-border rounded-2xl focus:border-primary outline-none transition-all text-sm font-medium" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                   </div>
+                   <Button variant="outline" size="icon" onClick={loadLogs} className="rounded-2xl"><RefreshCw className={isLoading ? 'animate-spin' : ''} size={18} /></Button>
+                </div>
+            </div>
 
+            {/* List */}
+            <div className="space-y-4">
                 {isLoading ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        {[...Array(6)].map((_, i) => (
-                            <Skeleton key={i} height={80} borderRadius={20} />
-                        ))}
+                    [1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} height={80} borderRadius={24} />)
+                ) : filteredLogs.length === 0 ? (
+                    <div className="py-20 text-center opacity-20">
+                       <Fingerprint size={80} strokeWidth={1} className="mx-auto mb-4" />
+                       <p className="text-xs font-black uppercase tracking-widest italic">No fingerprints detected in the current range</p>
                     </div>
                 ) : (
-                    <div className={`${styles.logsContainer} card`}>
-                        {filteredLogs.length === 0 ? (
-                            <div style={{ padding: '5rem', textAlign: 'center', opacity: 0.3 }}>
-                                <History size={60} style={{ marginBottom: '1rem' }} />
-                                <p>No matching audit records located in current cache.</p>
+                    filteredLogs.map((log) => (
+                        <Card key={log.id} className="group hover:border-primary/30 hover:bg-primary/5 transition-all p-4 border-l-4 border-l-border/50 hover:border-l-primary" noPadding>
+                            <div className="flex items-center gap-5 p-2">
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border border-border/50 group-hover:scale-110 transition-transform ${log.isDeleted ? 'bg-rose-500/10 text-rose-500' : 'bg-primary/10 text-primary'}`}>
+                                   {getActionIcon(log)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                   <div className="flex justify-between items-baseline gap-4 mb-1">
+                                      <p className="font-bold text-sm truncate tracking-tight">{log.userName || 'System Processor'}</p>
+                                      <span className="text-[10px] font-black uppercase text-muted-foreground whitespace-nowrap opacity-60">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(log.timestamp).toLocaleDateString()}</span>
+                                   </div>
+                                   <p className="text-xs text-muted-foreground font-medium flex items-center gap-2">
+                                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${log.isDeleted ? 'bg-rose-500/10 text-rose-500' : 'bg-muted text-foreground opacity-60'}`}>{log.action.replace(/_/g, ' ')}</span>
+                                      <span className="truncate opacity-70 italic">{log.details}</span>
+                                   </p>
+                                </div>
+                                <Button variant="ghost" size="icon" className="rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setSelectedLog(log)}><Eye size={16} /></Button>
                             </div>
-                        ) : (
-                            <div className={styles.logsList}>
-                                {filteredLogs.map((log: ActivityLogType) => (
-                                    <div key={log.id} className={`${styles.logCard} ${log.isDeleted ? styles.deletedLog : ''}`}>
-                                        <div className={styles.logLeft}>
-                                            <div className={`${styles.typeBadge} ${log.isDeleted ? styles.deleteBadge : styles[log.dataType]}`}>
-                                                {getActionIcon(log)}
-                                            </div>
-                                            <div className={styles.logContent}>
-                                                <div className={styles.logAction}>
-                                                    <span className={styles.userName}>{log.userName || 'System Processor'}</span>
-                                                    <span className={styles.actionText}>
-                                                        {log.isDeleted ? 'permanently removed ' : 'executed '}
-                                                        <span style={{ fontWeight: 700, color: 'var(--color-text)' }}>{getActionLabel(log.action)}</span>
-                                                    </span>
-                                                    <span className={`${styles.dataType} ${styles[log.dataType]}`}>
-                                                        {log.dataType}
-                                                    </span>
-                                                </div>
-                                                <div className={styles.logMeta}>
-                                                    <Clock size={12} />
-                                                    <span>{new Date(log.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                                                    {log.details && (
-                                                        <>
-                                                            <span className={styles.dot}>•</span>
-                                                            <span className={styles.detailsText}>{log.details}</span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className={styles.logRight}>
-                                            <button className={styles.detailsBtn} onClick={() => setSelectedLog(log)}>
-                                                <Eye size={16} /> INSPECT
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                        </Card>
+                    ))
                 )}
             </div>
 
+            {/* Modal */}
             {selectedLog && (
-                <div className={styles.modalOverlay}>
-                    <div className={styles.modal}>
-                        <div className={styles.modalHeader}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <Database size={20} style={{ color: 'var(--color-primary)' }} />
-                                <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Transaction Payload Details</h2>
-                            </div>
-                            <button onClick={() => setSelectedLog(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}><X size={24} /></button>
-                        </div>
-                        <div className={styles.modalBody}>
-                            <div className={styles.logSummary}>
-                                <div className={styles.summaryItem}>
-                                    <label>Action ID</label>
-                                    <span>#{selectedLog.id.slice(0, 8)}</span>
-                                </div>
-                                <div className={styles.summaryItem}>
-                                    <label>Operator</label>
-                                    <span>{selectedLog.userName}</span>
-                                </div>
-                                <div className={styles.summaryItem}>
-                                    <label>Entity Class</label>
-                                    <span style={{ textTransform: 'uppercase' }}>{selectedLog.dataType}</span>
-                                </div>
-                                <div className={styles.summaryItem}>
-                                    <label>Timestamp</label>
-                                    <span>{new Date(selectedLog.timestamp).toLocaleString()}</span>
-                                </div>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-fade-in">
+                    <Card className="w-full max-w-2xl shadow-2xl rounded-[32px] overflow-hidden" noPadding title="Forensic Payload">
+                        <div className="p-8 space-y-8">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                               <div className="p-4 bg-muted/30 rounded-2xl border border-border/50 space-y-1">
+                                  <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Entry ID</p>
+                                  <p className="text-xs font-bold font-mono">#{selectedLog.id.slice(0, 8)}</p>
+                               </div>
+                               <div className="p-4 bg-muted/30 rounded-2xl border border-border/50 space-y-1">
+                                  <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Operator</p>
+                                  <p className="text-xs font-bold leading-none">{selectedLog.userName}</p>
+                               </div>
+                               <div className="p-4 bg-muted/30 rounded-2xl border border-border/50 space-y-1">
+                                  <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Data Class</p>
+                                  <p className="text-xs font-bold uppercase tracking-tighter">{selectedLog.dataType}</p>
+                               </div>
+                               <div className="p-4 bg-muted/30 rounded-2xl border border-border/50 space-y-1">
+                                  <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Clock</p>
+                                  <p className="text-xs font-bold uppercase tracking-tighter italic">LIVE FEED</p>
+                               </div>
                             </div>
 
                             {selectedLog.previousState ? (
-                                <div className={styles.stateContainer}>
-                                    <h3>Data State Snapshot</h3>
-                                    <pre className={styles.payload}>
-                                        {JSON.stringify(selectedLog.previousState, null, 2)}
-                                    </pre>
+                                <div className="space-y-3">
+                                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">
+                                      <Terminal size={14} /> State Snapshot
+                                   </div>
+                                   <pre className="p-6 bg-slate-900 text-emerald-400 rounded-3xl text-xs font-mono overflow-auto max-h-[300px] border border-slate-800 shadow-inner">
+                                       {JSON.stringify(selectedLog.previousState, null, 2)}
+                                   </pre>
                                 </div>
                             ) : (
-                                <div style={{ textAlign: 'center', padding: '2rem', background: 'var(--color-secondary)', borderRadius: 'var(--radius-xl)', color: 'var(--color-text-tertiary)', fontSize: '13px' }}>
-                                    No complex state captured for this event.
+                                <div className="py-10 bg-muted/20 border border-dashed border-border rounded-3xl text-center">
+                                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest italic">No complex state modification detected</p>
                                 </div>
                             )}
 
-                            {selectedLog.details && (
-                                <div className={styles.detailsBox}>
-                                    <h3>Audit Narrative</h3>
-                                    <p>{selectedLog.details}</p>
-                                </div>
-                            )}
-
-                            {selectedLog.isDeleted && (
-                                <div className={styles.deleteWarning}>
-                                    <Trash2 size={24} />
-                                    <div>
-                                        <h4>SOFT-DELETION ALERT</h4>
-                                        <p>This record was marked for deletion by the operator. The system has preserved the original data object above as a forensic snapshot.</p>
-                                    </div>
-                                </div>
-                            )}
+                            <div className="flex gap-4">
+                               <Button variant="outline" className="flex-1 rounded-2xl py-6" onClick={() => setSelectedLog(null)}>Exit Terminal</Button>
+                               <Button className="flex-1 rounded-2xl py-6 shadow-glow" onClick={() => setSelectedLog(null)}>Verified Audit</Button>
+                            </div>
                         </div>
-                        <div style={{ padding: '24px 32px', borderTop: '1px solid var(--color-border)', textAlign: 'right' }}>
-                            <button className="btn-primary" onClick={() => setSelectedLog(null)}>CLOSE TERMINAL</button>
-                        </div>
-                    </div>
+                    </Card>
                 </div>
             )}
-        </Layout>
+        </div>
     );
 };
 

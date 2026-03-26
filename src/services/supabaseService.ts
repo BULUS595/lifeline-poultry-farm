@@ -179,18 +179,48 @@ export const supabaseDataService = {
    */
   async addMortalityLog(log: Omit<MortalityLog, 'id' | 'createdAt' | 'synced'>) {
     try {
+      const dbLog = {
+        farm_id: log.farmId,
+        worker_id: log.workerId,
+        worker_name: log.workerName,
+        date: log.date,
+        count: log.count,
+        cause: log.cause,
+        batch_id: log.batchId,
+        notes: log.notes,
+        image_url: log.imageUrl,
+        synced: true,
+      };
+
       const { data, error } = await supabase
         .from('mortality_logs')
-        .insert([{ ...log, synced: true }])
+        .insert([dbLog])
         .select()
         .single();
 
       if (error) throw error;
-      return data as MortalityLog;
+      return this._mapMortalityLog(data);
     } catch (error) {
       console.error('Add mortality log error:', error);
       throw error;
     }
+  },
+
+  _mapMortalityLog(d: any): MortalityLog {
+    return {
+      id: d.id,
+      farmId: d.farm_id,
+      workerId: d.worker_id,
+      workerName: d.worker_name,
+      date: d.date,
+      count: d.count,
+      cause: d.cause,
+      batchId: d.batch_id,
+      notes: d.notes,
+      imageUrl: d.image_url,
+      createdAt: d.created_at,
+      synced: d.synced,
+    };
   },
 
   /**
@@ -220,7 +250,7 @@ export const supabaseDataService = {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as MortalityLog[];
+      return (data || []).map(d => this._mapMortalityLog(d));
     } catch (error) {
       console.error('Get mortality logs error:', error);
       return [];

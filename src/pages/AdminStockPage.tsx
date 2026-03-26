@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     CheckCircle2, XCircle, Package, Search, AlertTriangle,
-    Trash2, RefreshCw, X, ShieldCheck, Edit3, ClipboardList,
+    Trash2, RefreshCw, X, ShieldCheck, Edit3,
     ShoppingBag, Banknote, Smartphone, CreditCard,
+    ArrowUpRight, TrendingUp, History,
+    UserCheck, AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Layout } from '../components/Layout';
 import { Skeleton } from '../components/Skeleton';
 import { supabase, supabaseDataService } from '../services/supabaseService';
 import { type StockItem, type RetailSale } from '../types';
-import styles from './AdminStockPage.module.css';
+import { Card, Button, Badge } from '../components/ui';
 
 type Tab = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SALES_HISTORY' | 'OUT_OF_STOCK';
 
@@ -17,16 +18,6 @@ const PAY_ICONS: Record<string, React.ReactNode> = {
     cash: <Banknote size={12} />,
     transfer: <Smartphone size={12} />,
     pos: <CreditCard size={12} />,
-};
-
-const StatusBadge = ({ status }: { status: string }) => {
-    const cfg: Record<string, { label: string; cls: string }> = {
-        PENDING_APPROVAL: { label: 'Pending', cls: styles.badgePending },
-        APPROVED: { label: 'Approved', cls: styles.badgeApproved },
-        REJECTED: { label: 'Rejected', cls: styles.badgeRejected },
-    };
-    const c = cfg[status] || { label: status, cls: '' };
-    return <span className={`${styles.badge} ${c.cls}`}>{c.label}</span>;
 };
 
 export const AdminStockPage: React.FC = () => {
@@ -40,13 +31,11 @@ export const AdminStockPage: React.FC = () => {
     const [acting, setActing] = useState<string | null>(null);
     const [approveError, setApproveError] = useState<string | null>(null);
 
-    // Edit modal
     const [editItem, setEditItem] = useState<StockItem | null>(null);
     const [editName, setEditName] = useState('');
     const [editQty, setEditQty] = useState('');
     const [editPrice, setEditPrice] = useState('');
 
-    // Reject modal
     const [rejectItem, setRejectItem] = useState<StockItem | null>(null);
     const [rejectNote, setRejectNote] = useState('');
 
@@ -72,29 +61,21 @@ export const AdminStockPage: React.FC = () => {
 
     useEffect(() => {
         loadStock();
-        const ch = supabase
-            .channel('admin-stock-v2')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items' }, loadStock)
-            .subscribe();
+        const ch = supabase.channel('admin-stock-v3').on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items' }, loadStock).subscribe();
         return () => { supabase.removeChannel(ch); };
     }, [loadStock]);
 
-    // Load sales when that tab is selected
     useEffect(() => {
         if (tab === 'SALES_HISTORY') loadSales();
     }, [tab, loadSales]);
 
     const filtered = useMemo(() =>
-        items.filter(i =>
-            (i.status === tab) &&
-            i.name.toLowerCase().includes(search.toLowerCase())
-        ), [items, tab, search]);
+        items.filter(i => (i.status === tab) && i.name.toLowerCase().includes(search.toLowerCase())), [items, tab, search]);
 
     const filteredSales = useMemo(() =>
         sales.filter(s => {
             let safeIts = Array.isArray(s.items) ? s.items : [];
             if (typeof s.items === 'string') { try { safeIts = JSON.parse(s.items); } catch(e) {} }
-
             return (s.receiptNumber?.toLowerCase().includes(search.toLowerCase()) ||
             s.customerName?.toLowerCase().includes(search.toLowerCase()) ||
             safeIts.some((it: any) => it.name?.toLowerCase().includes(search.toLowerCase())));
@@ -107,32 +88,23 @@ export const AdminStockPage: React.FC = () => {
         OUT_OF_STOCK: items.filter(i => i.status === 'OUT_OF_STOCK').length,
     };
 
-    if (!isSuperAdmin && !isManager) {
-        return (
-            <Layout title="Access Denied">
-                <div style={{ textAlign: 'center', padding: '5rem 2rem', color: 'var(--color-text-tertiary)' }}>
-                    <ShieldCheck size={60} opacity={0.15} />
-                    <h2 style={{ marginTop: '1.5rem' }}>Access Restricted</h2>
-                    <p>Only Admins and Managers can view this page.</p>
-                </div>
-            </Layout>
-        );
-    }
+    if (!isSuperAdmin && !isManager) return (
+      <div className="h-[60vh] flex flex-col items-center justify-center opacity-50 space-y-4">
+         <div className="p-6 bg-rose-500/10 rounded-full text-rose-500"><ShieldCheck size={48} /></div>
+         <h2 className="text-2xl font-black uppercase tracking-tight italic">Root Restricted</h2>
+         <p className="max-w-xs text-center font-medium">Stock auditing is restricted to authorized management personnel.</p>
+      </div>
+    );
 
     const approve = async (item: StockItem) => {
         if (!user) return;
         setApproveError(null);
         setActing(item.id);
         const ok = await supabaseDataService.approveStockItem(item.id, { id: user.id, name: user.name, role: user.role });
-        if (ok) {
-            setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'APPROVED' } : i));
-        } else {
-            setApproveError(`Failed to approve "${item.name}". Check browser console for details.`);
-        }
+        if (ok) setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'APPROVED' } : i));
+        else setApproveError(`Failed to approve "${item.name}"`);
         setActing(null);
     };
-
-    const openReject = (item: StockItem) => { setRejectItem(item); setRejectNote(''); };
 
     const confirmReject = async () => {
         if (!rejectItem || !user) return;
@@ -143,27 +115,14 @@ export const AdminStockPage: React.FC = () => {
         setActing(null);
     };
 
-    const openEdit = (item: StockItem) => {
-        setEditItem(item);
-        setEditName(item.name);
-        setEditQty(String(item.quantity));
-        setEditPrice(String(item.unitPrice));
-    };
-
     const confirmEdit = async () => {
         if (!editItem || !user) return;
         setActing(editItem.id);
-        
         const newQty = parseFloat(editQty);
-        // Automatically determine if restocked
         const newStatus = (editItem.status === 'OUT_OF_STOCK' && newQty > 0) ? 'APPROVED' : editItem.status;
-
         const ok = await supabaseDataService.updateStockItem(editItem.id, {
-            name: editName,
-            quantity: newQty,
-            unitPrice: parseFloat(editPrice),
+            name: editName, quantity: newQty, unitPrice: parseFloat(editPrice),
         }, { id: user.id, name: user.name, role: user.role });
-        
         if (ok) {
             setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, name: editName, quantity: newQty, unitPrice: parseFloat(editPrice), status: newStatus } : i));
             setEditItem(null);
@@ -179,310 +138,204 @@ export const AdminStockPage: React.FC = () => {
         setActing(null);
     };
 
-    const TABS = [
-        { id: 'PENDING_APPROVAL' as Tab, label: 'Pending', count: counts.PENDING_APPROVAL },
-        { id: 'APPROVED' as Tab, label: 'Approved', count: counts.APPROVED },
-        { id: 'OUT_OF_STOCK' as Tab, label: 'Out of Stock', count: counts.OUT_OF_STOCK, icon: <AlertTriangle size={13} color="var(--color-danger)" /> },
-        { id: 'REJECTED' as Tab, label: 'Rejected', count: counts.REJECTED },
-        { id: 'SALES_HISTORY' as Tab, label: 'Sold Goods History', count: sales.length, icon: <ShoppingBag size={13} /> },
-    ];
-
-    const totalRevenue = useMemo(() => sales.reduce((s, sale) => s + (sale.totalPrice || 0), 0), [sales]);
-
     return (
-        <Layout title="Stock Control">
-            <div className={styles.page}>
-                {/* Header */}
-                <div className={styles.header}>
-                    <div>
-                        <h1 className={styles.title}>Admin <span style={{ color: 'var(--color-primary)' }}>Control</span></h1>
-                        <p className={styles.sub}>Approve stock submissions · Review sales history</p>
-                    </div>
-                    <button className={styles.refreshBtn} onClick={tab === 'SALES_HISTORY' ? loadSales : loadStock} title="Refresh">
-                        <RefreshCw size={18} />
-                    </button>
+        <div className="space-y-10 pb-20">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-end">
+                <div>
+                   <h1 className="text-4xl font-black tracking-tighter uppercase italic text-primary underline decoration-primary/20">Stock <span className="italic">Terminal</span></h1>
+                   <p className="text-muted-foreground font-medium mt-1 uppercase text-[10px] tracking-widest opacity-60">Authorize and audit global inventory flow</p>
                 </div>
-
-                {/* Error banner */}
-                {approveError && (
-                    <div className={styles.errorBanner}>
-                        <span>{approveError}</span>
-                        <button onClick={() => setApproveError(null)}><X size={14} /></button>
-                    </div>
-                )}
-
-                {/* Tabs + Search */}
-                <div className={styles.toolbar}>
-                    <div className={styles.tabs}>
-                        {TABS.map(t => (
-                            <button
-                                key={t.id}
-                                className={`${styles.tab} ${tab === t.id ? styles.tabActive : ''}`}
-                                onClick={() => setTab(t.id)}
-                            >
-                                {t.icon && t.icon}
-                                {t.label}
-                                {t.count > 0 && (
-                                    <span className={`${styles.tabCount} ${tab === t.id ? styles.tabCountActive : ''}`}>
-                                        {t.count}
-                                    </span>
-                                )}
-                            </button>
-                        ))}
-                    </div>
-                    <div className={styles.searchBox}>
-                        <Search size={16} />
-                        <input
-                            type="text"
-                            placeholder={tab === 'SALES_HISTORY' ? 'Search sales...' : 'Search items...'}
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                        />
-                    </div>
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                   <div className="relative flex-1 md:w-72">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                      <input type="text" placeholder="Search resources..." className="w-full pl-11 pr-4 py-3 bg-card border border-border rounded-2xl focus:border-primary outline-none transition-all text-sm font-medium" value={search} onChange={e => setSearch(e.target.value)} />
+                   </div>
+                   <Button variant="outline" size="icon" onClick={loadStock} className="rounded-2xl h-[46px] w-[46px]"><RefreshCw className={isLoading ? 'animate-spin' : ''} size={18} /></Button>
                 </div>
-
-                {/* ── SALES HISTORY TAB ─────────────────────── */}
-                {tab === 'SALES_HISTORY' ? (
-                    <div className={styles.salesSection}>
-                        {/* Revenue summary */}
-                        <div className={styles.revenueSummary}>
-                            <div className={styles.revenueCard}>
-                                <span>Total Sales</span>
-                                <strong>{sales.length}</strong>
-                            </div>
-                            <div className={styles.revenueCard}>
-                                <span>Total Revenue</span>
-                                <strong>₦{totalRevenue.toLocaleString()}</strong>
-                            </div>
-                        </div>
-                        
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-                            <button 
-                                onClick={() => window.location.href = '/admin/sales'} 
-                                style={{ 
-                                    display: 'flex', gap: '8px', alignItems: 'center', 
-                                    background: 'var(--color-primary)', color: '#000', 
-                                    padding: '8px 16px', borderRadius: '8px',
-                                    fontWeight: 600, border: 'none', cursor: 'pointer',
-                                    boxShadow: '0 4px 6px rgba(13, 222, 178, 0.2)'
-                                }}
-                            >
-                                <ClipboardList size={18} />
-                                Open Detailed Transactions Module
-                            </button>
-                        </div>
-
-                        <div className={`${styles.tableWrap} card`} style={{ padding: 0, overflow: 'hidden' }}>
-                            <table className={styles.table}>
-                                <thead>
-                                    <tr>
-                                        <th>Receipt #</th>
-                                        <th>Date & Time</th>
-                                        <th>Items Sold</th>
-                                        <th>Payment</th>
-                                        <th>Customer</th>
-                                        <th>Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {salesLoading ? (
-                                        <tr><td colSpan={6} style={{ padding: '2rem' }}><Skeleton height={40} borderRadius={10} /></td></tr>
-                                    ) : filteredSales.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={6} className={styles.emptyCell}>
-                                                <ShoppingBag size={36} opacity={0.12} />
-                                                <p>No sales recorded yet</p>
-                                            </td>
-                                        </tr>
-                                    ) : filteredSales.map(sale => (
-                                        <tr key={sale.id} className={styles.row}>
-                                            <td>
-                                                <span className={styles.receiptNum}>#{sale.receiptNumber}</span>
-                                            </td>
-                                            <td className={styles.dateCell}>
-                                                <span>{new Date(sale.createdAt).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                                                <span className={styles.timeText}>{new Date(sale.createdAt).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}</span>
-                                            </td>
-                                            <td>
-                                                <div className={styles.itemsList}>
-                                                    {(() => {
-                                                        let safeIts = Array.isArray(sale.items) ? sale.items : [];
-                                                        if (typeof sale.items === 'string') {
-                                                            try { safeIts = JSON.parse(sale.items); } catch(e) {}
-                                                        }
-                                                        return safeIts.map((it: any, idx: number) => (
-                                                            <span key={idx} className={styles.soldItem}>
-                                                                {it.name} ×{it.quantity}
-                                                            </span>
-                                                        ));
-                                                    })()}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span className={`${styles.payBadge} ${styles[`pay_${sale.paymentMethod}`]}`}>
-                                                    {PAY_ICONS[sale.paymentMethod] || null}
-                                                    {sale.paymentMethod?.toUpperCase()}
-                                                </span>
-                                            </td>
-                                            <td style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                                                {sale.customerName || 'Walk-in'}
-                                            </td>
-                                            <td>
-                                                <strong style={{ color: 'var(--color-primary)', fontWeight: 900 }}>
-                                                    ₦{(sale.totalPrice || 0).toLocaleString()}
-                                                </strong>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                ) : (
-                    /* ── STOCK MANAGEMENT TABS ───────────────── */
-                    <div className={`${styles.tableWrap} card`} style={{ padding: 0, overflow: 'hidden' }}>
-                        <table className={styles.table}>
-                            <thead>
-                                <tr>
-                                    <th>Item</th>
-                                    <th>Qty</th>
-                                    <th>Price</th>
-                                    <th>Submitted By</th>
-                                    <th>Date</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {isLoading ? (
-                                    <tr><td colSpan={7} style={{ padding: '2rem' }}><Skeleton height={40} borderRadius={10} /></td></tr>
-                                ) : filtered.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7} className={styles.emptyCell}>
-                                            <Package size={36} opacity={0.15} />
-                                            <p>No {tab.replace('_', ' ').toLowerCase()} items</p>
-                                        </td>
-                                    </tr>
-                                ) : filtered.map(item => (
-                                    <tr key={item.id} className={`${styles.row} ${acting === item.id ? styles.rowActing : ''}`}>
-                                        <td>
-                                            <div className={styles.itemCell}>
-                                                {item.imageUrl
-                                                    ? <img src={item.imageUrl} alt={item.name} className={styles.thumb} onError={e => (e.currentTarget.style.display = 'none')} />
-                                                    : <div className={styles.thumbPlaceholder}><Package size={16} /></div>
-                                                }
-                                                <strong>{item.name}</strong>
-                                            </div>
-                                        </td>
-                                        <td>{item.quantity.toLocaleString()} <span style={{ color: 'var(--color-text-tertiary)', fontSize: 12 }}>{item.unit}</span></td>
-                                        <td style={{ fontWeight: 800 }}>₦{item.unitPrice.toLocaleString()}</td>
-                                        <td style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>{item.submittedByName || '—'}</td>
-                                        <td style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{new Date(item.lastUpdated).toLocaleDateString()}</td>
-                                        <td><StatusBadge status={item.status} /></td>
-                                        <td>
-                                            <div className={styles.actions}>
-                                                {item.status === 'PENDING_APPROVAL' && (
-                                                    <>
-                                                        <button
-                                                            className={styles.btnApprove}
-                                                            onClick={() => approve(item)}
-                                                            disabled={acting === item.id}
-                                                            title="Approve this stock"
-                                                        >
-                                                            {acting === item.id ? '...' : <><CheckCircle2 size={14} /> Approve</>}
-                                                        </button>
-                                                        <button
-                                                            className={styles.btnReject}
-                                                            onClick={() => openReject(item)}
-                                                            disabled={acting === item.id}
-                                                            title="Reject"
-                                                        >
-                                                            <XCircle size={14} /> Reject
-                                                        </button>
-                                                    </>
-                                                )}
-                                                <button className={styles.btnEdit} onClick={() => openEdit(item)} title="Edit">
-                                                    <Edit3 size={14} />
-                                                </button>
-                                                <button className={styles.btnDelete} onClick={() => deleteItem(item)} title="Delete">
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
             </div>
 
-            {/* REJECT MODAL */}
-            {rejectItem && (
-                <div className={styles.overlay}>
-                    <div className={styles.modal}>
-                        <div className={styles.modalHeader}>
-                            <h2>Reject "{rejectItem.name}"</h2>
-                            <button onClick={() => setRejectItem(null)}><X size={20} /></button>
-                        </div>
-                        <div className={styles.modalBody}>
-                            <label>Reason / Feedback for inventory staff</label>
-                            <textarea
-                                value={rejectNote}
-                                onChange={e => setRejectNote(e.target.value)}
-                                placeholder="e.g. Price too high, quantity mismatch..."
-                                rows={3}
-                            />
-                        </div>
-                        <div className={styles.modalFooter}>
-                            <button className="btn-outline" onClick={() => setRejectItem(null)}>Cancel</button>
-                            <button
-                                className="btn-primary"
-                                style={{ background: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-                                onClick={confirmReject}
-                                disabled={acting !== null}
-                            >
-                                {acting ? 'Rejecting...' : 'Confirm Reject'}
-                            </button>
-                        </div>
-                    </div>
+            {/* Error banner */}
+            {approveError && (
+                <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center justify-between text-rose-500 font-bold italic text-sm">
+                   <div className="flex items-center gap-2"><AlertCircle size={18} /> {approveError}</div>
+                   <button onClick={() => setApproveError(null)} className="p-1 hover:bg-rose-500/10 rounded-lg"><X size={16} /></button>
                 </div>
             )}
 
-            {/* EDIT MODAL */}
-            {editItem && (
-                <div className={styles.overlay}>
-                    <div className={styles.modal}>
-                        <div className={styles.modalHeader}>
-                            <h2>Edit Stock Item</h2>
-                            <button onClick={() => setEditItem(null)}><X size={20} /></button>
-                        </div>
-                        <div className={styles.modalBody}>
-                            <div className={styles.editGrid}>
-                                <div className={styles.field}>
-                                    <label>Name</label>
-                                    <input type="text" value={editName} onChange={e => setEditName(e.target.value)} />
+            {/* Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 hide-scrollbar">
+                {[
+                    { id: 'PENDING_APPROVAL', label: 'Pending', count: counts.PENDING_APPROVAL, variant: 'warning' },
+                    { id: 'APPROVED', label: 'Authorized', count: counts.APPROVED, variant: 'success' },
+                    { id: 'OUT_OF_STOCK', label: 'Depleted', count: counts.OUT_OF_STOCK, variant: 'danger' },
+                    { id: 'REJECTED', label: 'Denied', count: counts.REJECTED, variant: 'secondary' },
+                    { id: 'SALES_HISTORY', label: 'Archived Sales', count: sales.length, variant: 'default' },
+                ].map((t) => (
+                    <button key={t.id} onClick={() => setTab(t.id as Tab)} className={`
+                        flex items-center gap-2.5 px-6 py-3 rounded-2xl whitespace-nowrap transition-all font-black text-[10px] uppercase tracking-widest border
+                        ${tab === t.id ? 'bg-primary text-primary-foreground border-primary shadow-glow scale-105' : 'bg-card text-muted-foreground border-border hover:border-primary/50'}
+                    `}>
+                        {t.label} 
+                        {t.count > 0 && <span className={`px-2 py-0.5 rounded-lg text-[9px] ${tab === t.id ? 'bg-white/20' : 'bg-muted'}`}>{t.count}</span>}
+                    </button>
+                ))}
+            </div>
+
+            {/* Content List */}
+            {tab === 'SALES_HISTORY' ? (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                       <Card className="bg-primary/10 border-primary/20 p-6 flex items-center gap-4">
+                          <div className="p-4 bg-primary/20 rounded-3xl text-primary"><TrendingUp size={24} /></div>
+                          <div>
+                             <p className="text-[10px] font-black uppercase text-primary tracking-widest opacity-60">Cumulative Revenue</p>
+                             <h3 className="text-3xl font-black tracking-tighter">₦{sales.reduce((s, sale) => s + (sale.totalPrice || 0), 0).toLocaleString()}</h3>
+                          </div>
+                       </Card>
+                       <Card className="bg-blue-500/10 border-blue-500/20 p-6 flex items-center gap-4">
+                          <div className="p-4 bg-blue-500/20 rounded-3xl text-blue-500"><History size={24} /></div>
+                          <div>
+                             <p className="text-[10px] font-black uppercase text-blue-500 tracking-widest opacity-60">Volume of Sales</p>
+                             <h3 className="text-3xl font-black tracking-tighter">{sales.length} <span className="text-sm opacity-40 font-bold uppercase italic">Transactions</span></h3>
+                          </div>
+                          <Button variant="ghost" className="ml-auto rounded-xl text-blue-500" onClick={() => window.location.href='/admin/sales'}><ArrowUpRight size={20} /></Button>
+                       </Card>
+                    </div>
+
+                    <div className="space-y-4">
+                       {salesLoading ? [1,2,3].map(i => <Skeleton key={i} height={100} borderRadius={24} />) : filteredSales.length === 0 ? (
+                          <div className="py-20 text-center opacity-20"><ShoppingBag size={80} className="mx-auto mb-4" /><p className="text-xs font-black uppercase italic">No archived transactions detected</p></div>
+                       ) : filteredSales.map(sale => (
+                          <Card key={sale.id} className="group hover:border-primary/30 transition-all p-5" noPadding>
+                             <div className="flex items-center gap-6">
+                                <div className="w-16 h-16 rounded-2xl bg-muted flex flex-col items-center justify-center shrink-0 border border-border/50 group-hover:scale-105 transition-transform text-muted-foreground">
+                                   <span className="text-[10px] font-black underline">SALES</span>
+                                   <span className="text-sm font-black font-mono">#{sale.receiptNumber}</span>
                                 </div>
-                                <div className={styles.field}>
-                                    <label>Quantity</label>
-                                    <input type="number" value={editQty} onChange={e => setEditQty(e.target.value)} min="0" />
+                                <div className="flex-1 min-w-0">
+                                   <div className="flex justify-between items-start mb-2">
+                                      <div>
+                                         <h4 className="font-extrabold text-sm tracking-tight">{sale.customerName || 'Walk-in Customer'}</h4>
+                                         <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-60">{new Date(sale.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                                      </div>
+                                      <div className="text-right">
+                                         <p className="text-lg font-black tracking-tighter text-emerald-500">₦{(sale.totalPrice || 0).toLocaleString()}</p>
+                                         <div className="flex items-center gap-1.5 justify-end text-[9px] font-bold text-muted-foreground uppercase mt-1">
+                                            {PAY_ICONS[sale.paymentMethod]} {sale.paymentMethod}
+                                         </div>
+                                      </div>
+                                   </div>
+                                   <div className="flex gap-2 overflow-x-auto hide-scrollbar">
+                                      {(() => {
+                                          let its = Array.isArray(sale.items) ? sale.items : [];
+                                          if (typeof sale.items === 'string') { try { its = JSON.parse(sale.items); } catch(e) {} }
+                                          return its.map((it: any, idx: number) => (
+                                              <Badge key={idx} variant="outline" className="px-2 py-0.5 text-[8px] font-black uppercase tracking-tight">{it.name} ×{it.quantity}</Badge>
+                                          ));
+                                      })()}
+                                   </div>
                                 </div>
-                                <div className={styles.field}>
-                                    <label>Unit Price (₦)</label>
-                                    <input type="number" value={editPrice} onChange={e => setEditPrice(e.target.value)} min="0" />
-                                </div>
-                            </div>
-                        </div>
-                        <div className={styles.modalFooter}>
-                            <button className="btn-outline" onClick={() => setEditItem(null)}>Cancel</button>
-                            <button className="btn-primary" onClick={confirmEdit} disabled={acting !== null}>
-                                {acting ? 'Saving...' : 'Save Changes'}
-                            </button>
-                        </div>
+                             </div>
+                          </Card>
+                       ))}
                     </div>
                 </div>
+            ) : (
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-400">
+                    {isLoading ? [1,2,3,4].map(i => <Skeleton key={i} height={100} borderRadius={24} />) : filtered.length === 0 ? (
+                       <div className="py-20 text-center opacity-20"><Package size={80} className="mx-auto mb-4" /><p className="text-xs font-black uppercase italic">No resources found in current view</p></div>
+                    ) : filtered.map(item => (
+                       <Card key={item.id} className={`group hover:border-primary/30 transition-all p-5 ${acting === item.id ? 'opacity-50 pointer-events-none' : ''}`} noPadding>
+                          <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+                             <div className="w-18 h-18 rounded-3xl bg-muted overflow-hidden shrink-0 border-2 border-border/50 group-hover:border-primary/30 transition-colors">
+                                {item.imageUrl ? <img src={item.imageUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-muted-foreground opacity-40"><Package size={24} /></div>}
+                             </div>
+                             <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start mb-2">
+                                   <div>
+                                      <div className="flex items-center gap-3">
+                                         <h4 className="font-extrabold text-lg tracking-tight">{item.name}</h4>
+                                         <Badge variant={item.status === 'PENDING_APPROVAL' ? 'warning' : item.status === 'APPROVED' ? 'success' : 'danger'} className="text-[9px] font-black uppercase tracking-widest">{item.status.replace('_', ' ')}</Badge>
+                                      </div>
+                                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60 mt-1 flex items-center gap-2">
+                                         <UserCheck size={12} className="text-primary" /> Submitted by: {item.submittedByName || 'Operational HQ'}
+                                      </p>
+                                   </div>
+                                   <div className="text-right">
+                                      <p className="text-xl font-black tracking-tighter">₦{item.unitPrice.toLocaleString()} <span className="text-[10px] opacity-40 italic">/ UNIT</span></p>
+                                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">{item.quantity} <span className="italic">{item.unit.toUpperCase()} REMAINING</span></p>
+                                   </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2 pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                   {item.status === 'PENDING_APPROVAL' && (
+                                      <>
+                                         <Button size="sm" className="rounded-xl h-9 bg-emerald-500 hover:bg-emerald-600 border-none px-4 shadow-sm" leftIcon={CheckCircle2} onClick={() => approve(item)}>Authorize</Button>
+                                         <Button size="sm" variant="outline" className="rounded-xl h-9 border-rose-500/50 text-rose-500 hover:bg-rose-500/10 px-4" leftIcon={XCircle} onClick={() => { setRejectItem(item); setRejectNote(''); }}>Deny</Button>
+                                      </>
+                                   )}
+                                   <Button variant="ghost" size="sm" className="rounded-xl h-9 text-muted-foreground" onClick={() => { setEditItem(item); setEditName(item.name); setEditQty(String(item.quantity)); setEditPrice(String(item.unitPrice)); }}><Edit3 size={16} /></Button>
+                                   <Button variant="ghost" size="sm" className="rounded-xl h-9 text-muted-foreground hover:text-rose-500" onClick={() => deleteItem(item)}><Trash2 size={16} /></Button>
+                                </div>
+                             </div>
+                          </div>
+                          {item.rejectionComment && item.status === 'REJECTED' && (
+                             <div className="mt-4 p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl flex items-center gap-3 text-rose-500/70 text-xs font-medium italic">
+                                <AlertTriangle size={14} className="shrink-0" /> Audit Note: {item.rejectionComment}
+                             </div>
+                          )}
+                       </Card>
+                    ))}
+                </div>
             )}
-        </Layout>
+
+            {/* Modals */}
+            {rejectItem && (
+               <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-fade-in">
+                  <Card className="w-full max-w-lg shadow-2xl rounded-[32px] overflow-hidden" noPadding title="Denial Certification">
+                     <div className="p-8 space-y-6">
+                        <div className="space-y-4">
+                           <p className="text-sm font-bold text-muted-foreground italic">Specify the forensic reason for denying this resource entry. This note will be visible to operational staff.</p>
+                           <textarea className="w-full p-4 bg-muted/30 border border-border rounded-2xl outline-none focus:border-rose-500 font-medium text-sm transition-all" rows={4} value={rejectNote} onChange={e => setRejectNote(e.target.value)} placeholder="Reason for denial..." />
+                        </div>
+                        <div className="flex gap-4">
+                           <Button variant="outline" className="flex-1 rounded-2xl py-6" onClick={() => setRejectItem(null)}>Abort</Button>
+                           <Button className="flex-1 rounded-2xl py-6 bg-rose-500 hover:bg-rose-600 border-none shadow-glow font-black" onClick={confirmReject}>Commit Denial</Button>
+                        </div>
+                     </div>
+                  </Card>
+               </div>
+            )}
+
+            {editItem && (
+               <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-fade-in">
+                  <Card className="w-full max-w-lg shadow-2xl rounded-[32px] overflow-hidden" noPadding title="Resource Modification">
+                     <div className="p-8 space-y-6">
+                        <div className="space-y-4">
+                           <div className="space-y-1.5">
+                              <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Resource Title</label>
+                              <input type="text" className="w-full px-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-bold text-sm" value={editName} onChange={e => setEditName(e.target.value)} />
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                 <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Volume Balance</label>
+                                 <input type="number" className="w-full px-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-black text-sm" value={editQty} onChange={e => setEditQty(e.target.value)} />
+                              </div>
+                              <div className="space-y-1.5">
+                                 <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Price / Unit</label>
+                                 <input type="number" className="w-full px-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-black text-sm" value={editPrice} onChange={e => setEditPrice(e.target.value)} />
+                              </div>
+                           </div>
+                        </div>
+                        <div className="flex gap-4">
+                           <Button variant="outline" className="flex-1 rounded-2xl py-6" onClick={() => setEditItem(null)}>Discard</Button>
+                           <Button className="flex-1 rounded-2xl py-6 shadow-glow font-black" onClick={confirmEdit}>Commit Changes</Button>
+                        </div>
+                     </div>
+                  </Card>
+               </div>
+            )}
+        </div>
     );
 };
 

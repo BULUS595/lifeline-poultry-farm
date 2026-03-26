@@ -13,15 +13,15 @@ import {
     Paperclip,
     Send,
     Edit3,
-    RefreshCw
+    RefreshCw,
+    Filter,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { Layout } from '../components/Layout';
 import { Skeleton } from '../components/Skeleton';
 import { supabase, supabaseDataService } from '../services/supabaseService';
 import { type StockItem } from '../types';
-import styles from './StoragePage.module.css';
+import { Card, Button, Badge } from '../components/ui';
 
 type FormData = {
     name: string;
@@ -35,15 +35,12 @@ type FormData = {
 const EMPTY_FORM: FormData = { name: '', quantity: '', unitPrice: '', unit: 'units', minThreshold: '10', imageUrl: '' };
 
 const StatusBadge = React.memo(({ status }: { status: string }) => {
-    const map: Record<string, any> = {
-        'PENDING_APPROVAL': { icon: <Clock size={12} />, label: 'Pending Approval', cls: styles.badgePending },
-        'APPROVED': { icon: <CheckCircle2 size={12} />, label: 'Approved', cls: styles.badgeApproved },
-        'REJECTED': { icon: <XCircle size={12} />, label: 'Rejected', cls: styles.badgeRejected },
-    };
-    const m = map[status] || { icon: <Clock size={12} />, label: status, cls: '' };
-    return <span className={`${styles.statusBadge} ${m.cls}`}>{m.icon} {m.label}</span>;
+    switch (status) {
+        case 'APPROVED': return <Badge variant="success">Approved</Badge>;
+        case 'REJECTED': return <Badge variant="error">Rejected</Badge>;
+        default: return <Badge variant="warning">Pending</Badge>;
+    }
 });
-
 
 export const StoragePage: React.FC = () => {
     const { user, isSuperAdmin, isManager } = useAuth();
@@ -62,7 +59,6 @@ export const StoragePage: React.FC = () => {
     
     const fileInputRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
-
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
     useEffect(() => {
@@ -95,19 +91,9 @@ export const StoragePage: React.FC = () => {
         return () => { supabase.removeChannel(channel); };
     }, [loadData]);
 
-    const openAddForm = () => {
-        setEditingItem(null);
-        setForm(EMPTY_FORM);
-        setFormError('');
-        setSelectedFile(null);
-        setShowForm(true);
-    };
-
-    /** Keep raw file in state for upload later */
     const handleImageFile = (file: File) => {
         if (!file.type.startsWith('image/')) { setFormError('Please select an image file.'); return; }
         setSelectedFile(file);
-        // show temp preview
         const reader = new FileReader();
         reader.onload = (e) => setForm(f => ({ ...f, imageUrl: e.target?.result as string }));
         reader.readAsDataURL(file);
@@ -118,8 +104,8 @@ export const StoragePage: React.FC = () => {
         if (!form.name.trim()) { setFormError('Item name is required.'); return; }
         const qty = parseFloat(form.quantity);
         const price = parseFloat(form.unitPrice);
-        if (isNaN(qty) || qty <= 0) { setFormError('Quantity must be a positive number.'); return; }
-        if (isNaN(price) || price <= 0) { setFormError('Unit price must be a positive number.'); return; }
+        if (isNaN(qty) || qty <= 0) { setFormError('Quantity must be positive.'); return; }
+        if (isNaN(price) || price <= 0) { setFormError('Unit price must be positive.'); return; }
         if (!form.imageUrl && !selectedFile && !editingItem) { setFormError('Product image is required.'); return; }
 
         setIsSubmitting(true);
@@ -149,7 +135,7 @@ export const StoragePage: React.FC = () => {
             loadData();
         } catch (err) {
             console.error(err);
-            setFormError('Submission failed. Please try again.');
+            setFormError('Submission failed.');
         } finally {
             setIsSubmitting(false);
         }
@@ -157,401 +143,213 @@ export const StoragePage: React.FC = () => {
 
     const handleDelete = async (item: StockItem) => {
         if (!user) return;
-        if (!confirm(`Permanently remove "${item.name}"? This action will be logged for Admin review.`)) return;
+        if (!confirm(`Delete "${item.name}"?`)) return;
         const ok = await supabaseDataService.deleteStockItem(item.id, { id: user.id, name: user.name, role: user.role });
-        if (ok) {
-            setItems(prev => prev.filter(i => i.id !== item.id));
-        }
+        if (ok) setItems(prev => prev.filter(i => i.id !== item.id));
     };
 
     const handleApprove = async (item: StockItem) => {
         if (!user || !isAdminView) return;
-        if (!confirm(`Approve "${item.name}" for sale?`)) return;
         const ok = await supabaseDataService.approveStockItem(item.id, { id: user.id, name: user.name, role: user.role });
-        if (ok) {
-            setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'APPROVED' } : i));
-        }
+        if (ok) setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'APPROVED' } : i));
     };
 
     const handleReject = async (item: StockItem) => {
         if (!user || !isAdminView) return;
-        const comment = prompt(`Reason for rejecting "${item.name}":`, 'Price too high');
+        const comment = prompt(`Reason for rejection:`, 'Review price/quantity');
         if (comment === null) return;
         const ok = await supabaseDataService.rejectStockItem(item.id, comment, { id: user.id, name: user.name, role: user.role });
-        if (ok) {
-            setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'REJECTED', rejectionComment: comment } : i));
-        }
+        if (ok) setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'REJECTED', rejectionComment: comment } : i));
     };
 
-    const handleOpenEdit = (item: StockItem) => {
-        setEditingItem(item);
-        setForm({
-            name: item.name,
-            quantity: String(item.quantity),
-            unitPrice: String(item.unitPrice),
-            unit: item.unit,
-            minThreshold: String(item.minThreshold),
-            imageUrl: item.imageUrl || ''
-        });
-        setFormError('');
-        setShowForm(true);
-    };
-
-
-    const filtered = useMemo(() => {
-        return items.filter(i => {
-            const matchSearch = i.name.toLowerCase().includes(debouncedSearch.toLowerCase());
-            const matchStatus = filterStatus === 'all' || i.status === filterStatus;
-            return matchSearch && matchStatus;
-        });
-    }, [items, debouncedSearch, filterStatus]);
-
-
-    const counts = useMemo(() => ({
-        PENDING_APPROVAL: items.filter(i => i.status === 'PENDING_APPROVAL').length,
-        APPROVED: items.filter(i => i.status === 'APPROVED').length,
-        REJECTED: items.filter(i => i.status === 'REJECTED').length,
-    }), [items]);
+    const filtered = useMemo(() => items.filter(i => {
+        const matchSearch = i.name.toLowerCase().includes(debouncedSearch.toLowerCase());
+        const matchStatus = filterStatus === 'all' || i.status === filterStatus;
+        return matchSearch && matchStatus;
+    }), [items, debouncedSearch, filterStatus]);
 
     if (isLoading && items.length === 0) {
         return (
-            <Layout title="Stock Submissions">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <Skeleton height={80} borderRadius={20} />
-                    <Skeleton height={300} borderRadius={20} />
+            <div className="space-y-6">
+                <Skeleton height={100} borderRadius={24} />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} height={200} borderRadius={24} />)}
                 </div>
-            </Layout>
+            </div>
         );
     }
 
     return (
-        <Layout title="Stock Submissions">
-            <div className={styles.container}>
-                {/* Header */}
-                <header className={styles.header}>
-                    <div className={styles.titleArea}>
-                        <h1>Stock <span style={{ color: 'var(--color-primary)' }}>Submissions</span></h1>
-                        <p>
-                            {isAdminView
-                                ? 'All submitted stock items across all staff.'
-                                : 'Submit new items for admin approval before they go live.'
-                            }
-                        </p>
-                    </div>
-                    <div className={styles.headerActions}>
-                        <button className={styles.refreshBtn} onClick={loadData}><RefreshCw size={18} /></button>
-                        {!isAdminView && (
-                            <button className="btn-primary" style={{ height: '44px', padding: '0 24px' }} onClick={openAddForm}>
-                                <Plus size={18} /> Submit New Item
-                            </button>
-                        )}
-                    </div>
-                </header>
+        <div className="space-y-8 pb-20">
+            {/* Header / Stats */}
+            <div className="flex flex-col md:flex-row gap-6 md:items-end justify-between">
+                <div>
+                   <h1 className="text-3xl font-black tracking-tighter uppercase italic">Inventory <span className="text-primary underline">Control</span></h1>
+                   <p className="text-muted-foreground font-medium mt-1">Manage stock submissions and approvals.</p>
+                </div>
+                {!isAdminView && (
+                    <Button size="lg" className="rounded-2xl px-8 shadow-glow" onClick={() => { setEditingItem(null); setForm(EMPTY_FORM); setShowForm(true); }}>
+                        <Plus className="mr-2" size={20} strokeWidth={3} /> Submit Item
+                    </Button>
+                )}
+            </div>
 
-                {/* Summary Pills */}
-                <div className={styles.summaryRow}>
-                    {[
-                        { key: 'all', label: 'All', count: items.length, color: 'var(--color-text-secondary)' },
-                        { key: 'PENDING_APPROVAL', label: 'Pending', count: counts.PENDING_APPROVAL, color: 'var(--color-warning)' },
-                        { key: 'APPROVED', label: 'Approved', count: counts.APPROVED, color: 'var(--color-success)' },
-                        { key: 'REJECTED', label: 'Rejected', count: counts.REJECTED, color: 'var(--color-danger)' },
-                    ].map(pill => (
+            {/* Filters */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-card p-4 rounded-3xl border border-border/50 shadow-soft">
+                <div className="flex bg-muted/50 p-1 rounded-2xl w-full md:w-auto overflow-x-auto hide-scrollbar">
+                    {['all', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED'].map(s => (
                         <button
-                            key={pill.key}
-                            className={`${styles.pill} ${filterStatus === pill.key ? styles.pillActive : ''}`}
-                            onClick={() => setFilterStatus(pill.key as any)}
-                            style={filterStatus === pill.key ? { borderColor: pill.color, color: pill.color } : {}}
+                            key={s}
+                            onClick={() => setFilterStatus(s)}
+                            className={`
+                                px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all
+                                ${filterStatus === s ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}
+                            `}
                         >
-                            <span className={styles.pillCount} style={filterStatus === pill.key ? { background: pill.color } : {}}>{pill.count}</span>
-                            {pill.label}
+                            {s === 'all' ? 'Everything' : s.replace('_APPROVAL', '')}
                         </button>
                     ))}
-                    <div className={styles.searchBar} style={{ marginLeft: 'auto' }}>
-                        <Search size={16} />
-                        <input
-                            type="text"
-                            placeholder="Search items..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                        />
-                    </div>
                 </div>
-
-                {/* Desktop Table View */}
-                <div className={`${styles.tableWrapper} card`} style={{ padding: 0, overflow: 'hidden' }}>
-                    <table className={styles.table}>
-                        <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th>Qty / Unit</th>
-                                <th>Unit Price</th>
-                                {isAdminView && <th>Submitted By</th>}
-                                <th>Status</th>
-                                <th>Date</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.length === 0 ? (
-                                <tr>
-                                    <td colSpan={isAdminView ? 7 : 6} style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-text-tertiary)' }}>
-                                        <Package size={40} opacity={0.2} style={{ marginBottom: '12px' }} />
-                                        <p>No submissions found.</p>
-                                    </td>
-                                </tr>
-                            ) : filtered.map(item => (
-                                <tr key={item.id} className={styles.tableRow}>
-                                    <td>
-                                        <div className={styles.itemCell}>
-                                            {item.imageUrl
-                                                ? <img src={item.imageUrl} alt={item.name} className={styles.itemThumb} />
-                                                : <div className={styles.itemThumbPlaceholder}><Package size={18} /></div>
-                                            }
-                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                <strong>{item.name}</strong>
-                                                {!isAdminView && <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>ID: {item.id.slice(0, 8)}</span>}
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>{item.quantity.toLocaleString()} <span style={{ color: 'var(--color-text-tertiary)', fontSize: '12px' }}>{item.unit}</span></td>
-                                    <td>₦{item.unitPrice.toLocaleString()}</td>
-                                    {isAdminView && <td style={{ fontSize: '13px' }}>{item.submittedByName || '—'}</td>}
-                                    <td>
-                                        <StatusBadge status={item.status} />
-                                        {item.status === 'REJECTED' && item.rejectionComment && (
-                                            <div style={{ fontSize: '11px', color: 'var(--color-danger)', marginTop: '4px', maxWidth: '160px' }}>
-                                                "{item.rejectionComment}"
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td style={{ fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
-                                        {new Date(item.lastUpdated).toLocaleDateString()}
-                                    </td>
-                                    <td>
-                                        <div className={styles.rowActions}>
-                                            {isAdminView && item.status === 'PENDING_APPROVAL' && (
-                                                <>
-                                                    <button className={styles.approveBtn} onClick={() => handleApprove(item)} title="Approve">
-                                                        <CheckCircle2 size={15} />
-                                                    </button>
-                                                    <button className={styles.rejectBtn} onClick={() => handleReject(item)} title="Reject">
-                                                        <XCircle size={15} />
-                                                    </button>
-                                                </>
-                                            )}
-                                            {isAdminView && (
-                                                <button className={styles.editBtn} onClick={() => handleOpenEdit(item)} title="Edit">
-                                                    <Edit3 size={15} />
-                                                </button>
-                                            )}
-                                            {(isAdminView || (item.status === 'PENDING_APPROVAL' && item.submittedBy === user?.id)) && (
-                                                <button className={styles.deleteBtn} onClick={() => handleDelete(item)} title="Delete">
-                                                    <Trash2 size={15} />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                
+                <div className="relative w-full md:w-72">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                    <input 
+                        type="text" 
+                        placeholder="Search stock..." 
+                        className="w-full pl-11 pr-4 py-2.5 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary transition-all text-sm font-medium"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                    />
                 </div>
+            </div>
 
-                {/* Mobile Card Grid View */}
-                <div className={styles.mobileGrid}>
-                    {filtered.length === 0 ? (
-                        <div className={styles.emptyMobile}>
-                            <Package size={48} opacity={0.1} />
-                            <p>No items found</p>
-                        </div>
-                    ) : filtered.map(item => (
-                        <div key={item.id} className={styles.mobileCard}>
-                            <div className={styles.mobileCardHeader}>
-                                <div className={styles.itemCell}>
-                                    {item.imageUrl
-                                        ? <img src={item.imageUrl} alt={item.name} className={styles.itemThumb} />
-                                        : <div className={styles.itemThumbPlaceholder}><Package size={18} /></div>
-                                    }
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                        <strong style={{ fontSize: '16px' }}>{item.name}</strong>
-                                        <div style={{ marginTop: '4px' }}><StatusBadge status={item.status} /></div>
-                                    </div>
-                                </div>
-                                <div className={styles.rowActions}>
+            {/* Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filtered.map(item => (
+                    <Card key={item.id} className="group overflow-hidden flex flex-col pt-0 px-0" noPadding>
+                        <div className="aspect-video w-full relative bg-muted/20 overflow-hidden border-b border-border/50">
+                            {item.imageUrl 
+                                ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                : <div className="w-full h-full flex items-center justify-center opacity-10"><Package size={64} /></div>
+                            }
+                            <div className="absolute top-4 left-4">
+                                <StatusBadge status={item.status} />
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-6">
+                                <div className="flex gap-2 w-full">
                                     {isAdminView && item.status === 'PENDING_APPROVAL' && (
                                         <>
-                                            <button className={styles.approveBtn} onClick={() => handleApprove(item)} title="Approve">
-                                                <CheckCircle2 size={15} />
-                                            </button>
-                                            <button className={styles.rejectBtn} onClick={() => handleReject(item)} title="Reject">
-                                                <XCircle size={15} />
-                                            </button>
+                                            <Button variant="primary" size="sm" className="flex-1 rounded-xl" onClick={() => handleApprove(item)} leftIcon={CheckCircle2}>Approve</Button>
+                                            <Button variant="danger" size="sm" className="flex-1 rounded-xl" onClick={() => handleReject(item)} leftIcon={XCircle}>Reject</Button>
                                         </>
-                                    )}
-                                    {isAdminView && (
-                                        <button className={styles.editBtn} onClick={() => handleOpenEdit(item)} title="Edit">
-                                            <Edit3 size={15} />
-                                        </button>
-                                    )}
-                                    {(isAdminView || (item.status === 'PENDING_APPROVAL' && item.submittedBy === user?.id)) && (
-                                        <button className={styles.deleteBtn} onClick={() => handleDelete(item)} title="Delete">
-                                            <Trash2 size={15} />
-                                        </button>
                                     )}
                                 </div>
                             </div>
-
-                            <div className={styles.mobileCardContent}>
-                                <div className={styles.mobileCardLabel}>
-                                    <span>Quantity</span>
-                                    <span>{item.quantity} {item.unit}</span>
+                        </div>
+                        
+                        <div className="p-6 flex-1 space-y-4">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className="font-black text-lg tracking-tight truncate max-w-[180px]">{item.name}</h3>
+                                    <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest opacity-60">Submitted by {item.submittedByName || 'Staff'}</p>
                                 </div>
-                                <div className={styles.mobileCardLabel}>
-                                    <span>Unit Price</span>
-                                    <span>₦{item.unitPrice.toLocaleString()}</span>
-                                </div>
-                                {isAdminView && (
-                                    <div className={styles.mobileCardLabel} style={{ gridColumn: '1 / -1' }}>
-                                        <span>Submitted By</span>
-                                        <span>{item.submittedByName || 'Unknown Staff'}</span>
-                                    </div>
-                                )}
-                                <div className={styles.mobileCardLabel} style={{ gridColumn: '1 / -1' }}>
-                                    <span>Submitted Date</span>
-                                    <span>{new Date(item.lastUpdated).toLocaleDateString()}</span>
+                                <div className="text-right">
+                                    <p className="text-2xl font-black tracking-tighter text-primary">₦{item.unitPrice.toLocaleString()}</p>
+                                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{item.quantity} {item.unit} available</p>
                                 </div>
                             </div>
 
                             {item.status === 'REJECTED' && item.rejectionComment && (
-                                <div className={styles.rejectionNotice}>
-                                    <AlertTriangle size={14} />
-                                    <span>Admin Feedback: "{item.rejectionComment}"</span>
+                                <div className="bg-rose-500/5 p-3 rounded-xl border border-rose-500/10 flex items-start gap-3">
+                                    <AlertTriangle className="text-rose-500 shrink-0 mt-0.5" size={14} />
+                                    <p className="text-xs text-rose-700 italic font-medium leading-relaxed">"{item.rejectionComment}"</p>
                                 </div>
                             )}
-                        </div>
-                    ))}
-                </div>
 
+                            <div className="flex items-center justify-between pt-2 border-t border-border/40">
+                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{new Date(item.lastUpdated).toLocaleDateString()}</span>
+                                <div className="flex gap-1">
+                                    <Button variant="ghost" size="icon" className="w-9 h-9 text-muted-foreground hover:text-primary hover:bg-primary/5" onClick={() => { setEditingItem(item); setForm({ name: item.name, quantity: String(item.quantity), unitPrice: String(item.unitPrice), unit: item.unit, minThreshold: String(item.minThreshold), imageUrl: item.imageUrl || '' }); setShowForm(true); }}><Edit3 size={16} /></Button>
+                                    <Button variant="ghost" size="icon" className="w-9 h-9 text-muted-foreground hover:text-destructive hover:bg-destructive/5" onClick={() => handleDelete(item)}><Trash2 size={16} /></Button>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+                ))}
+                
+                {filtered.length === 0 && (
+                    <div className="col-span-full py-20 text-center space-y-4 opacity-30">
+                        <Package size={80} strokeWidth={1} className="mx-auto" />
+                        <p className="text-xl font-black uppercase italic tracking-tighter">No Stock entries found</p>
+                    </div>
+                )}
             </div>
 
-            {/* Add / Edit Modal */}
+            {/* Modal */}
             {showForm && (
-                <div className={styles.modalOverlay}>
-                    <div className={styles.modal}>
-                        <div className={styles.modalHeader}>
-                            <h2>{editingItem ? 'Edit Submission' : 'Submit New Stock Item'}</h2>
-                            <button onClick={() => setShowForm(false)} className={styles.closeModal}><X size={22} /></button>
-                        </div>
-                        <div className={styles.modalBody}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-fade-in">
+                    <Card className="w-full max-w-xl shadow-2xl rounded-[32px] overflow-hidden" noPadding title={editingItem ? "Update Item" : "New Submission"}>
+                        <div className="p-8 space-y-6">
                             {formError && (
-                                <div className={styles.formError}>
-                                    <AlertTriangle size={16} /> {formError}
+                                <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center gap-3 text-rose-600 text-sm font-bold">
+                                    <AlertTriangle size={18} /> {formError}
                                 </div>
                             )}
-                            <div className={styles.formGrid}>
-                                <div className={styles.inputGroup} style={{ gridColumn: '1 / -1' }}>
-                                    <label>ITEM NAME *</label>
-                                    <input type="text" placeholder="e.g. Live Broiler Chicken" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-1.5 md:col-span-2">
+                                    <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Product Name</label>
+                                    <input type="text" className="w-full px-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-medium" placeholder="Broiler Chicken" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                                 </div>
-                                <div className={styles.inputGroup}>
-                                    <label>QUANTITY *</label>
-                                    <input type="number" min="0" step="0.01" placeholder="0" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Quantity</label>
+                                    <input type="number" className="w-full px-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-medium" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
                                 </div>
-                                <div className={styles.inputGroup}>
-                                    <label>UNIT *</label>
-                                    <select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
-                                        {['units', 'kg', 'g', 'crates', 'bags', 'birds', 'packs', 'litres'].map(u => (
-                                            <option key={u} value={u}>{u}</option>
-                                        ))}
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Unit</label>
+                                    <select className="w-full px-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-medium" value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
+                                        {['units', 'kg', 'birds', 'litres', 'crates', 'bags'].map(u => <option key={u} value={u}>{u}</option>)}
                                     </select>
                                 </div>
-                                <div className={styles.inputGroup}>
-                                    <label>UNIT PRICE (₦) *</label>
-                                    <input type="number" min="0" step="0.01" placeholder="0.00" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} />
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Unit Price (₦)</label>
+                                    <input type="number" className="w-full px-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-medium" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} />
                                 </div>
-                                <div className={styles.inputGroup}>
-                                    <label>LOW STOCK THRESHOLD</label>
-                                    <input type="number" min="0" placeholder="10" value={form.minThreshold} onChange={e => setForm(f => ({ ...f, minThreshold: e.target.value }))} />
-                                </div>
-                                <div className={styles.inputGroup} style={{ gridColumn: '1 / -1' }}>
-                                    <label>PRODUCT PHOTO (Optional)</label>
-                                    <div className={styles.imagePickerRow}>
-                                        {/* Hidden file inputs */}
-                                        <input
-                                            ref={fileInputRef}
-                                            type="file"
-                                            accept="image/*"
-                                            style={{ display: 'none' }}
-                                            onChange={e => e.target.files?.[0] && handleImageFile(e.target.files[0])}
-                                        />
-                                        <input
-                                            ref={cameraInputRef}
-                                            type="file"
-                                            accept="image/*"
-                                            capture="environment"
-                                            style={{ display: 'none' }}
-                                            onChange={e => e.target.files?.[0] && handleImageFile(e.target.files[0])}
-                                        />
-                                        {/* Attach button */}
-                                        <button
-                                            type="button"
-                                            className={styles.imagePickerBtn}
-                                            onClick={() => fileInputRef.current?.click()}
-                                            title="Attach photo from gallery"
-                                        >
-                                            <Paperclip size={16} />
-                                            Attach Photo
-                                        </button>
-                                        {/* Camera button */}
-                                        <button
-                                            type="button"
-                                            className={styles.imagePickerBtn}
-                                            onClick={() => cameraInputRef.current?.click()}
-                                            title="Snap photo with camera"
-                                        >
-                                            <Camera size={16} />
-                                            Take Photo
-                                        </button>
-                                        {/* Clear button */}
-                                        {form.imageUrl && (
-                                            <button
-                                                type="button"
-                                                className={styles.imageClearBtn}
-                                                onClick={() => setForm(f => ({ ...f, imageUrl: '' }))}
-                                                title="Remove photo"
-                                            >
-                                                <X size={14} /> Remove
-                                            </button>
-                                        )}
-                                    </div>
-                                    {form.imageUrl && (
-                                        <div className={styles.imagePreviewWrap}>
-                                            <img
-                                                src={form.imageUrl}
-                                                alt="Preview"
-                                                className={styles.imagePreview}
-                                                onError={e => (e.currentTarget.style.display = 'none')}
-                                            />
-                                        </div>
-                                    )}
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Low Stock Limit</label>
+                                    <input type="number" className="w-full px-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-medium" value={form.minThreshold} onChange={e => setForm(f => ({ ...f, minThreshold: e.target.value }))} />
                                 </div>
                             </div>
 
-                            <div className={styles.submissionNotice}>
-                                <Send size={16} />
-                                <p>This item will be sent to the admin for review before it appears in the Sales Terminal.</p>
+                            <div className="space-y-4">
+                               <p className="text-[10px] font-black uppercase text-muted-foreground ml-1">Product Image</p>
+                               <div className="flex gap-4">
+                                  <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={e => e.target.files?.[0] && handleImageFile(e.target.files[0])} />
+                                  <Button variant="secondary" className="rounded-2xl flex-1 py-6" onClick={() => fileInputRef.current?.click()} leftIcon={Paperclip}>Gallery</Button>
+                                  <input ref={cameraInputRef} type="file" className="hidden" accept="image/*" capture="environment" onChange={e => e.target.files?.[0] && handleImageFile(e.target.files[0])} />
+                                  <Button variant="secondary" className="rounded-2xl flex-1 py-6" onClick={() => cameraInputRef.current?.click()} leftIcon={Camera}>Camera</Button>
+                               </div>
+                               {form.imageUrl && (
+                                   <div className="relative group w-32 h-32 rounded-2xl overflow-hidden border border-border mx-auto">
+                                       <img src={form.imageUrl} className="w-full h-full object-cover" />
+                                       <button className="absolute top-1 right-1 bg-rose-500 text-white p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setForm(f => ({ ...f, imageUrl: '' }))}>
+                                           <X size={14} />
+                                       </button>
+                                   </div>
+                               )}
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <Button variant="outline" className="flex-1 rounded-2xl py-6" onClick={() => setShowForm(false)}>Cancel</Button>
+                                <Button className="flex-1 rounded-2xl py-6 shadow-glow" onClick={handleSubmit} isLoading={isSubmitting} leftIcon={Send}>
+                                    {editingItem ? 'Update' : 'Submit'}
+                                </Button>
                             </div>
                         </div>
-                        <div className={styles.modalFooter}>
-                            <button className="btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
-                            <button className="btn-primary" onClick={handleSubmit} disabled={isSubmitting}>
-                                {isSubmitting ? 'Submitting...' : <><Send size={16} /> {editingItem ? 'Update Submission' : 'Submit for Approval'}</>}
-                            </button>
-                        </div>
-                    </div>
+                    </Card>
                 </div>
             )}
-        </Layout>
+        </div>
     );
 };
 

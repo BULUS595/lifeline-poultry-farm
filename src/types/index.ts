@@ -38,10 +38,13 @@ export interface MortalityLog {
   id: string;
   farmId: string;
   workerId: string;
+  workerName?: string;
   date: string; // ISO date format
   count: number;
   cause?: string;
+  batchId?: string;
   notes?: string;
+  imageUrl?: string;
   createdAt: string;
   synced: boolean;
 }

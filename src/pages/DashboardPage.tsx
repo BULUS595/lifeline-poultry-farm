@@ -12,6 +12,8 @@ import {
   AlertTriangle,
   Zap,
   Filter,
+  ArrowDownRight,
+  RefreshCw,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -23,156 +25,44 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
-import { Layout } from '../components/Layout';
 import { Skeleton } from '../components/Skeleton';
 import { supabase } from '../services/supabaseService';
 import { type Farm } from '../types';
-import styles from './DashboardPage.module.css';
+import { Card, Button, Badge } from '../components/ui';
 
-/* Sub-components for better performance and DOM isolation */
-const KPICard = React.memo(({ label, value, meta, icon, type, trend }: any) => (
-  <div className={`${styles.kpiCard} card gpu-accelerate render-fast`}>
-    <div className={styles.kpiHeader}>
-      <div className={`${styles.iconBox} ${styles[type]}`}>
-        {icon}
+/* Sub-components */
+const KPICard = React.memo(({ label, value, meta, icon: Icon, trend, trendType }: any) => (
+  <Card hoverable className="relative overflow-hidden group">
+    <div className="flex items-start justify-between">
+      <div className={`p-3 rounded-2xl ${trendType === 'up' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-blue-500/10 text-primary'}`}>
+        <Icon size={24} strokeWidth={2.5} />
       </div>
       {trend && (
-        <div className={trend > 0 ? styles.trendUp : styles.trendDown}>
-          {trend > 0 ? <ArrowUpRight size={14} /> : <AlertTriangle size={14} />}
+        <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg ${trend > 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'}`}>
+          {trend > 0 ? <ArrowUpRight size={12} strokeWidth={3} /> : <ArrowDownRight size={12} strokeWidth={3} />}
           {Math.abs(trend)}%
         </div>
       )}
     </div>
-    <div className={styles.kpiContent}>
-      <span className={styles.kpiLabel}>{label}</span>
-      <h2 className={styles.kpiValue}>₦{value.toLocaleString()}</h2>
-      <p className={styles.kpiMeta}>{meta}</p>
+    <div className="mt-5">
+      <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
+      <h2 className="text-3xl font-black mt-1 tracking-tighter">₦{value.toLocaleString()}</h2>
+      <p className="text-xs text-muted-foreground mt-2 font-medium opacity-70 flex items-center gap-1.5">
+        <RefreshCw size={10} className="animate-spin-slow" /> {meta}
+      </p>
     </div>
-  </div>
+    <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors" />
+  </Card>
 ));
-
-const RevenueChart = React.memo(({ data, period, onPeriodChange }: { data: any[], period: string, onPeriodChange: (p: string) => void }) => (
-  <div className={`${styles.chartCard} card gpu-accelerate render-fast`}>
-    <div className={styles.cardHeader}>
-      <h3 className={styles.cardTitle}>Revenue Performance</h3>
-      <div className={styles.cardActions}>
-        <button className={period === 'weekly' ? styles.activeBtn : ''} onClick={() => onPeriodChange('weekly')}>Weekly</button>
-        <button className={period === 'monthly' ? styles.activeBtn : ''} onClick={() => onPeriodChange('monthly')}>Monthly</button>
-      </div>
-    </div>
-    <div className={styles.chartArea}>
-      <ResponsiveContainer width="100%" height={320}>
-        <AreaChart data={data}>
-          <defs>
-            <linearGradient id="colorPrimary" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
-          <XAxis
-            dataKey="name"
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12, fontWeight: 700 }}
-            dy={10}
-          />
-          <YAxis
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: 'var(--color-text-tertiary)', fontSize: 12, fontWeight: 700 }}
-            tickFormatter={(v) => `₦${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
-          />
-          <Tooltip
-            contentStyle={{
-              background: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border)',
-              borderRadius: '16px',
-              boxShadow: 'var(--shadow-lg)'
-            }}
-          />
-          <Area
-            type="monotone"
-            dataKey="revenue"
-            stroke="var(--color-primary)"
-            strokeWidth={4}
-            fillOpacity={1}
-            fill="url(#colorPrimary)"
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  </div>
-));
-
-const OperationalLog = React.memo(({ activity, onMore }: any) => (
-  <div className={`${styles.sidebarCard} card render-fast`}>
-    <div className={styles.sidebarHeader}>
-      <h3 className={styles.cardTitle}><History size={20} /> Operation Log</h3>
-    </div>
-    <div className={styles.activityList}>
-      {activity.map((log: any) => (
-        <div key={log.id} className={styles.activityItem}>
-          <div className={styles.activityDot} style={{ background: log.isDeleted ? 'var(--color-danger)' : 'var(--color-primary)' }} />
-          <div className={styles.activityInfo}>
-            <span className={styles.activityUser}>{log.userName || 'System'}</span>
-            <span className={styles.activityAction}>
-              {log.isDeleted ? ' deleted ' : ' '}
-              {log.action.replace('_', ' ').toLowerCase()}
-            </span>
-            <span className={styles.activityTime}>{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-          </div>
-        </div>
-      ))}
-      {activity.length === 0 && (
-        <div className={styles.emptyState}>No recent activity detected.</div>
-      )}
-    </div>
-    <button className={styles.moreBtn} onClick={onMore}>
-      View Operational Audit <ChevronRight size={14} />
-    </button>
-  </div>
-));
-
-const InventoryHealth = React.memo(({ storage }: any) => {
-  const lowStock = storage.filter((i: any) => (i.quantity || 0) <= (i.min_threshold || 0));
-  return (
-    <div className={`${styles.sidebarCard} card render-fast`}>
-      <div className={styles.sidebarHeader}>
-        <h3 className={styles.cardTitle}><Activity size={20} /> Inventory Health</h3>
-      </div>
-      <div className={styles.stockList}>
-        {lowStock.slice(0, 3).map((item: any) => (
-          <div key={item.id} className={styles.stockItem}>
-            <div className={styles.stockMeta}>
-              <span className={styles.stockName}>{item.name}</span>
-              <span className={styles.stockStatus}>CRITICAL</span>
-            </div>
-            <div className={styles.stockBar}>
-              <div className={styles.stockFill} style={{ width: '20%', background: 'var(--color-danger)' }} />
-            </div>
-          </div>
-        ))}
-        {lowStock.length === 0 && (
-          <div className={styles.emptyState}>
-            <Zap size={24} color="var(--color-success)" style={{ opacity: 0.2 }} />
-            <span>All systems optimal.</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-});
 
 export const DashboardPage: React.FC = () => {
   const { user, isSuperAdmin, isManager, isAuditor } = useAuth();
   const navigate = useNavigate();
 
-
   const [farms, setFarms] = useState<Farm[]>([]);
-  const [sales, setSales] = useState<any[]>([]); // Using RetailSale from new schema
+  const [sales, setSales] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
-  const [storage, setStorage] = useState<any[]>([]); // Using StockItems from new schema
+  const [storage, setStorage] = useState<any[]>([]);
   const [activity, setActivity] = useState<any[]>([]);
   const [revenuePeriod, setRevenuePeriod] = useState<'weekly' | 'monthly'>('weekly');
   const [isLoading, setIsLoading] = useState(true);
@@ -237,89 +127,194 @@ export const DashboardPage: React.FC = () => {
       revenue: sales.filter(s => s.created_at.startsWith(date)).reduce((sum, s) => sum + (s.total_price || 0), 0),
     }));
   }, [sales, revenuePeriod]);
+
   if (user?.role === 'sales_staff') return <Navigate to="/sales" replace />;
   if (user?.role === 'inventory_staff') return <Navigate to="/stock" replace />;
 
   if (isLoading && farms.length === 0) {
     return (
-      <Layout title="Modern Console">
-        <div className={styles.loading}>
-          <Skeleton height={200} borderRadius={30} />
-          <div className="grid-3" style={{ marginTop: '30px' }}>
-            <Skeleton height={180} borderRadius={30} />
-            <Skeleton height={180} borderRadius={30} />
-            <Skeleton height={180} borderRadius={30} />
-          </div>
+      <div className="space-y-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[1, 2, 3].map(i => <Skeleton key={i} height={180} borderRadius={24} />)}
         </div>
-      </Layout>
+        <Skeleton height={400} borderRadius={24} />
+      </div>
     );
   }
 
   const canViewLogs = isSuperAdmin || isManager || isAuditor;
 
   return (
-    <Layout title="Overview">
-      <div className={`${styles.dashboard} animate-fade`}>
-        <header className={styles.header}>
-          <div className={styles.welcome}>
-            <h1 className={styles.title}>Hello, {user?.name}</h1>
-            <p className={styles.subtitle}>Welcome back! Here's what's happening on your farm today.</p>
-          </div>
-          <div className={styles.actions}>
-            <button className="btn-outline" onClick={() => loadData()}>
-              <Filter size={18} /> Filters
-            </button>
-            <button className="btn-primary" onClick={() => navigate('/sales')}>
-              <Plus size={18} /> New Transaction
-            </button>
-          </div>
-        </header>
+    <div className="space-y-8 pb-10">
+      {/* KPI Row */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <KPICard
+          label="Total Revenue"
+          value={stats.revenue}
+          meta={`₦${stats.todayRevenue.toLocaleString()} earned today`}
+          icon={DollarSign}
+          trend={12.5}
+          trendType="blue"
+        />
+        <KPICard
+          label="Net Profit"
+          value={stats.profit}
+          meta="Based on approved expenses"
+          icon={TrendingUp}
+          trend={8.4}
+          trendType="up"
+        />
+        <KPICard
+          label="Restock Needed"
+          value={stats.lowStock}
+          meta="Critical items in storage"
+          icon={Package}
+          trend={-2.1}
+          trendType="down"
+        />
+      </section>
 
-        <section className={styles.kpiRow}>
-          <KPICard
-            label="Total Revenue"
-            value={stats.revenue}
-            meta={`₦${stats.todayRevenue.toLocaleString()} earned today`}
-            icon={<DollarSign size={24} />}
-            type="blue"
-            trend={12}
-          />
-          <KPICard
-            label="Net Profit"
-            value={stats.profit}
-            meta="Calculated from gross ledger"
-            icon={<TrendingUp size={24} />}
-            type="emerald"
-            trend={8.4}
-          />
-          <KPICard
-            label="Storage Status"
-            value={storage.length}
-            meta={`${stats.lowStock} items need restocking`}
-            icon={<Package size={24} />}
-            type="amber"
-          />
-        </section>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Chart Column */}
+        <div className="lg:col-span-2 space-y-8">
+          <Card 
+            title="Revenue Performance" 
+            subtitle="Financial growth visualization"
+            footer={
+              <div className="flex items-center gap-3">
+                 <Badge variant="success">+{revenuePeriod === 'weekly' ? '12%' : '24%'} growth</Badge>
+                 <span className="text-xs text-muted-foreground font-medium">vs last period</span>
+              </div>
+            }
+          >
+            <div className="flex items-center justify-end mb-6 gap-2">
+              <Button 
+                variant={revenuePeriod === 'weekly' ? 'primary' : 'secondary'} 
+                size="sm" 
+                onClick={() => setRevenuePeriod('weekly')}
+                className="rounded-xl px-4"
+              >
+                7 Days
+              </Button>
+              <Button 
+                variant={revenuePeriod === 'monthly' ? 'primary' : 'secondary'} 
+                size="sm" 
+                onClick={() => setRevenuePeriod('monthly')}
+                className="rounded-xl px-4"
+              >
+                30 Days
+              </Button>
+            </div>
+            
+            <div className="h-[350px] w-full pt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: 'var(--muted-foreground)', fontSize: 11, fontWeight: 600 }}
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: 'var(--muted-foreground)', fontSize: 11, fontWeight: 600 }}
+                    tickFormatter={(v) => `₦${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      borderRadius: '16px', 
+                      border: '1px solid var(--border)',
+                      boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                      backgroundColor: 'var(--card)',
+                      color: 'var(--foreground)'
+                    }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="revenue" 
+                    stroke="var(--primary)" 
+                    strokeWidth={4} 
+                    fillOpacity={1} 
+                    fill="url(#chartGradient)" 
+                    animationDuration={1500}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        </div>
 
-        <main className={styles.gridContainer}>
-          <RevenueChart
-            data={chartData}
-            period={revenuePeriod}
-            onPeriodChange={(p: any) => setRevenuePeriod(p)}
-          />
+        {/* Sidebar Column */}
+        <div className="space-y-8">
+          {canViewLogs && (
+            <Card title="Activity Log" subtitle="Real-time farm events" className="h-full">
+              <div className="space-y-5">
+                {activity.map((log) => (
+                  <div key={log.id} className="flex gap-4 items-start group">
+                    <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${log.isDeleted ? 'bg-rose-500' : 'bg-primary'} group-hover:scale-150 transition-transform`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-baseline gap-2">
+                        <p className="text-sm font-bold truncate tracking-tight">{log.userName}</p>
+                        <span className="text-[10px] font-black text-muted-foreground opacity-60 uppercase">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                        Performed <span className="font-bold text-foreground lowercase opacity-80">{log.action.replace('_', ' ')}</span> operation
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {activity.length === 0 && (
+                  <div className="py-10 text-center space-y-3">
+                    <div className="w-12 h-12 bg-muted/30 rounded-2xl flex items-center justify-center mx-auto">
+                      <History className="text-muted-foreground/30" />
+                    </div>
+                    <p className="text-sm text-muted-foreground font-medium italic">No logs found today.</p>
+                  </div>
+                )}
+                <Button variant="ghost" fullWidth size="sm" onClick={() => navigate('/admin/activity')} className="mt-4 hover:bg-primary/5 hover:text-primary py-4">
+                  Full Audit Trail <ChevronRight size={14} className="ml-1" strokeWidth={3} />
+                </Button>
+              </div>
+            </Card>
+          )}
 
-          <div className={styles.sidebarColumn}>
-            {canViewLogs && (
-              <OperationalLog
-                activity={activity}
-                onMore={() => navigate('/admin/activity')}
-              />
-            )}
-            <InventoryHealth storage={storage} />
-          </div>
-        </main>
+          <Card title="Inventory Health" subtitle="Critical stock alerts">
+             <div className="space-y-6">
+                {storage.filter(i => (i.quantity || 0) <= (i.min_threshold || 0)).slice(0, 3).map((item) => (
+                  <div key={item.id} className="space-y-3">
+                     <div className="flex justify-between items-center bg-rose-500/5 p-2 rounded-xl">
+                        <span className="text-sm font-bold truncate pr-4">{item.name}</span>
+                        <Badge variant="error" className="animate-pulse">Low</Badge>
+                     </div>
+                     <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-rose-500 rounded-full" style={{ width: '20%' }} />
+                     </div>
+                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right">
+                        Threshold: {item.min_threshold} {item.unit}
+                     </p>
+                  </div>
+                ))}
+                {storage.filter(i => (i.quantity || 0) <= (i.min_threshold || 0)).length === 0 && (
+                  <div className="py-8 text-center bg-emerald-500/5 rounded-3xl border border-emerald-500/10">
+                    <Zap className="text-emerald-500 mx-auto mb-3" size={32} />
+                    <p className="text-sm font-bold text-emerald-600">Storage Stable</p>
+                    <p className="text-[10px] text-emerald-600/60 uppercase font-black mt-1">All stocks optimal</p>
+                  </div>
+                )}
+             </div>
+          </Card>
+        </div>
       </div>
-    </Layout>
+    </div>
   );
 };
 

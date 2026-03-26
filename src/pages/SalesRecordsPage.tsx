@@ -1,24 +1,23 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     Search, Download, TrendingUp, Calendar,
-    Filter, X, User, ShoppingBag, MapPin, Receipt, Package, CheckCircle2
+    Filter, X, User, ShoppingBag, MapPin, Receipt, Package, CheckCircle2,
+    DollarSign, ArrowUpRight, ArrowDownRight, Printer, Clock, SearchIcon,
+    ArrowUpDown,
+    DownloadCloud,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Layout } from '../components/Layout';
 import { supabase, supabaseDataService } from '../services/supabaseService';
 import { type RetailSale, type StockItem } from '../types';
-import styles from './SalesRecordsPage.module.css';
+import { Card, Button, Badge } from '../components/ui';
 
 export const SalesRecordsPage: React.FC = () => {
     const { isSuperAdmin, isManager } = useAuth();
-    
-    // Data states
     const [sales, setSales] = useState<RetailSale[]>([]);
     const [stockItems, setStockItems] = useState<StockItem[]>([]);
     const [staffDict, setStaffDict] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(true);
 
-    // Filters
     const [searchTerm, setSearchTerm] = useState('');
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
@@ -29,16 +28,13 @@ export const SalesRecordsPage: React.FC = () => {
     const loadData = useCallback(async () => {
         setIsLoading(true);
         try {
-            // Fetch sales, stock images, and users in parallel
             const [salesData, stockData, { data: usersData }] = await Promise.all([
                 supabaseDataService.getRetailSales(),
                 supabaseDataService.getAllStockItems(),
                 supabase.from('users').select('id, name')
             ]);
-            
             setSales(salesData);
             setStockItems(stockData);
-            
             if (usersData) {
                 const sDict: Record<string, string> = {};
                 usersData.forEach(u => sDict[u.id] = u.name);
@@ -51,40 +47,17 @@ export const SalesRecordsPage: React.FC = () => {
         }
     }, []);
 
-    useEffect(() => {
-        loadData();
-    }, [loadData]);
+    useEffect(() => { loadData(); }, [loadData]);
 
-    // Ensure only Admins can view this route.
-    if (!isSuperAdmin && !isManager) {
-        return (
-            <Layout title="Unauthorized">
-                <div style={{ padding: '4rem 2rem', textAlign: 'center', color: 'var(--color-danger)' }}>
-                    <h2>Unauthorized Access</h2>
-                    <p>You do not have permission to view the Sales Records module.</p>
-                </div>
-            </Layout>
-        );
-    }
-
-    // Unroll transactions into individual item-level records for the table
-    // A single receipt may contain 3 products. This makes 3 rows, matching user requirement:
-    // "Transaction ID, Product Name, Product Image, Quantity Sold..."
     const unrolledRecords = useMemo(() => {
         const records: any[] = [];
         sales.forEach(sale => {
             const saleDate = new Date(sale.createdAt);
             const salespersonName = staffDict[sale.salespersonId] || 'Unknown Staff';
-            
             let safeItems = Array.isArray(sale.items) ? sale.items : [];
-            if (typeof sale.items === 'string') {
-                try { safeItems = JSON.parse(sale.items); } catch(e) {}
-            }
-
+            if (typeof sale.items === 'string') { try { safeItems = JSON.parse(sale.items); } catch(e) {} }
             safeItems.forEach(item => {
-                // Find image url
                 const stock = stockItems.find(si => si.id === item.id);
-                
                 records.push({
                     id: `${sale.id}-${item.id || Math.random()}`,
                     receiptNumber: sale.receiptNumber || 'N/A',
@@ -99,7 +72,6 @@ export const SalesRecordsPage: React.FC = () => {
                     salespersonId: sale.salespersonId || '',
                     paymentMethod: sale.paymentMethod || 'cash',
                     customerName: sale.customerName || 'Walk-in',
-                    // Assuming all completed retail_sales are Paid.
                     paymentStatus: 'Paid'
                 });
             });
@@ -109,260 +81,181 @@ export const SalesRecordsPage: React.FC = () => {
 
     const filteredRecords = useMemo(() => {
         let result = unrolledRecords.filter(r => {
-            const safeName = r.productName || '';
-            const safeReceipt = r.receiptNumber || '';
-            
-            const matchesSearch = 
-                safeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                safeReceipt.toLowerCase().includes(searchTerm.toLowerCase());
-            
+            const matchesSearch = (r.productName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                 (r.receiptNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStaff = staffFilter ? r.salespersonId === staffFilter : true;
             const matchesPay = payMethodFilter ? r.paymentMethod === payMethodFilter : true;
-            
             let matchesDate = true;
             if (dateFrom) matchesDate = matchesDate && r.date >= new Date(dateFrom);
-            if (dateTo) {
-                const toDate = new Date(dateTo);
-                toDate.setHours(23, 59, 59, 999);
-                matchesDate = matchesDate && r.date <= toDate;
-            }
-            
+            if (dateTo) { const toDate = new Date(dateTo); toDate.setHours(23, 59, 59, 999); matchesDate = matchesDate && r.date <= toDate; }
             return matchesSearch && matchesStaff && matchesPay && matchesDate;
         });
-
         if (sortBy === 'date_desc') result.sort((a, b) => b.date.getTime() - a.date.getTime());
         else if (sortBy === 'date_asc') result.sort((a, b) => a.date.getTime() - b.date.getTime());
         else if (sortBy === 'amount_desc') result.sort((a, b) => b.totalAmount - a.totalAmount);
-
         return result;
     }, [unrolledRecords, searchTerm, staffFilter, payMethodFilter, dateFrom, dateTo, sortBy]);
 
-    // STATS
-    const totalRevenue = useMemo(() => filteredRecords.reduce((sum, r) => sum + r.totalAmount, 0), [filteredRecords]);
-    const totalItemsSold = useMemo(() => filteredRecords.reduce((sum, r) => sum + r.quantity, 0), [filteredRecords]);
-    
-    // Distinct transactions count in filtered subset
-    const totalTransactions = useMemo(() => new Set(filteredRecords.map(r => r.receiptNumber)).size, [filteredRecords]);
-    
-    const todaysSales = useMemo(() => {
-        const todayStr = new Date().toLocaleDateString();
-        return filteredRecords
-            .filter(r => r.date.toLocaleDateString() === todayStr)
-            .reduce((sum, r) => sum + r.totalAmount, 0);
+    const stats = useMemo(() => {
+        const revenue = filteredRecords.reduce((sum, r) => sum + r.totalAmount, 0);
+        const txCount = new Set(filteredRecords.map(r => r.receiptNumber)).size;
+        const volume = filteredRecords.reduce((sum, r) => sum + r.quantity, 0);
+        const today = new Date().toLocaleDateString();
+        const todayRev = filteredRecords.filter(r => r.date.toLocaleDateString() === today).reduce((sum, r) => sum + r.totalAmount, 0);
+        return { revenue, txCount, volume, todayRev };
     }, [filteredRecords]);
 
     const handleExportCSV = () => {
-        if (filteredRecords.length === 0) return alert('No data to export.');
-        const headers = ['Receipt #', 'Date & Time', 'Product', 'Qty', 'Unit Price', 'Total', 'Payment', 'Status', 'Customer', 'Staff'];
-        const rows = filteredRecords.map(r => [
-            r.receiptNumber || 'N/A',
-            `${r.date.toLocaleDateString()} ${r.date.toLocaleTimeString()}`,
-            `"${(r.productName || '').replace(/"/g, '""')}"`,
-            r.quantity,
-            r.unitPrice,
-            r.totalAmount,
-            (r.paymentMethod || 'cash').toUpperCase(),
-            r.paymentStatus,
-            `"${(r.customerName || '').replace(/"/g, '""')}"`,
-            `"${(r.salespersonName || '').replace(/"/g, '""')}"`
-        ]);
-        
-        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        if (filteredRecords.length === 0) return;
+        const headers = ['Receipt', 'Date', 'Product', 'Qty', 'Price', 'Total', 'Payment', 'Staff'];
+        const rows = filteredRecords.map(r => [r.receiptNumber, r.date.toLocaleString(), r.productName, r.quantity, r.unitPrice, r.totalAmount, r.paymentMethod, r.salespersonName]);
+        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Sales_Records_${new Date().toISOString().split('T')[0]}.csv`;
+        a.download = `Sales_${new Date().toISOString().split('T')[0]}.csv`;
         a.click();
-        URL.revokeObjectURL(url);
     };
 
-    // Extract unique staff lists for dropdown
     const uniqueStaff = useMemo(() => {
         const ids = [...new Set(unrolledRecords.map(r => r.salespersonId))];
         return ids.map(id => ({ id, name: staffDict[id] || 'Unknown' }));
     }, [unrolledRecords, staffDict]);
 
+    const isAdmin = isSuperAdmin || isManager;
+    if (!isAdmin) return (
+      <div className="h-[60vh] flex flex-col items-center justify-center opacity-50 space-y-4">
+         <div className="p-6 bg-rose-500/10 rounded-full text-rose-500"><XCircle size={48} /></div>
+         <h2 className="text-2xl font-black uppercase tracking-tight italic">Access Denied</h2>
+         <p className="max-w-xs text-center font-medium">Only administrators can access the fiscal archives.</p>
+      </div>
+    );
+
     return (
-        <Layout title="Transactions">
-            <div className={styles.page}>
-                <div className={styles.headerRow}>
-                    <div>
-                        <h1 className={styles.title}>Sales <span style={{ color: 'var(--color-primary)' }}>Records</span></h1>
-                        <p className={styles.subtitle}>Detailed history of all products sold across the farm.</p>
-                    </div>
-                    <button className={styles.exportBtn} onClick={handleExportCSV}>
-                        <Download size={16} /> Export CSV
-                    </button>
+        <div className="space-y-10 pb-20">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-end">
+                <div>
+                   <h1 className="text-4xl font-black tracking-tighter uppercase italic">Fiscal <span className="text-primary italic underline">Archives</span></h1>
+                   <p className="text-muted-foreground font-medium mt-1 uppercase text-[10px] tracking-widest opacity-60">Consolidated audit trail of all products sold</p>
                 </div>
+                <Button size="lg" className="rounded-2xl px-8 shadow-glow" onClick={handleExportCSV} leftIcon={DownloadCloud}>
+                   Export Dataset
+                </Button>
+            </div>
 
-                {/* SUMMARY STATS */}
-                <div className={styles.statsGrid}>
-                    <div className={styles.statCard}>
-                        <div className={styles.statIcon} style={{ background: 'rgba(26, 188, 156, 0.1)', color: 'var(--color-primary)' }}>
-                            <TrendingUp size={24} />
-                        </div>
-                        <div className={styles.statInfo}>
-                            <span>Filtered Revenue</span>
-                            <strong>₦{totalRevenue.toLocaleString()}</strong>
-                        </div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statIcon} style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
-                            <Receipt size={24} />
-                        </div>
-                        <div className={styles.statInfo}>
-                            <span>Transactions</span>
-                            <strong>{totalTransactions}</strong>
-                        </div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statIcon} style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
-                            <Calendar size={24} />
-                        </div>
-                        <div className={styles.statInfo}>
-                            <span>Today's Sales</span>
-                            <strong>₦{todaysSales.toLocaleString()}</strong>
-                        </div>
-                    </div>
-                    <div className={styles.statCard}>
-                        <div className={styles.statIcon} style={{ background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6' }}>
-                            <ShoppingBag size={24} />
-                        </div>
-                        <div className={styles.statInfo}>
-                            <span>Items Sold</span>
-                            <strong>{totalItemsSold.toLocaleString()}</strong>
-                        </div>
-                    </div>
-                </div>
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                 {[
+                   { label: 'Dataset Revenue', value: stats.revenue, icon: Wallet, color: 'text-primary', bg: 'bg-primary/10' },
+                   { label: 'Transactions', value: stats.txCount, icon: Receipt, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                   { label: "Today's Yield", value: stats.todayRev, icon: TrendingUp, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                   { label: 'Volume Sold', value: stats.volume, icon: ShoppingBag, color: 'text-amber-500', bg: 'bg-amber-500/10', isNum: true }
+                 ].map((stat, i) => (
+                   <Card key={i} className="relative overflow-hidden group">
+                      <div className="flex justify-between items-start">
+                         <div className={`p-3 rounded-2xl ${stat.bg} ${stat.color}`}><stat.icon size={20} strokeWidth={2.5} /></div>
+                         <div className="w-12 h-1 bg-muted/30 rounded-full" />
+                      </div>
+                      <div className="mt-5">
+                         <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{stat.label}</p>
+                         <h3 className="text-2xl font-black tracking-tighter mt-1">{stat.isNum ? '' : '₦'}{stat.value.toLocaleString()}</h3>
+                      </div>
+                   </Card>
+                 ))}
+            </div>
 
-                {/* FILTERS SECTION (Sticky Header logic done via CSS) */}
-                <div className={styles.filtersSection}>
-                    <div className={styles.searchBox}>
-                        <Search size={18} />
-                        <input
-                            type="text"
-                            placeholder="Search product or receipt..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                        />
-                        {searchTerm && <button onClick={() => setSearchTerm('')} className={styles.clearBtn}><X size={14} /></button>}
+            {/* Filters */}
+            <Card className="rounded-[40px] p-2" noPadding>
+                <div className="p-4 flex flex-col lg:flex-row gap-4 items-center">
+                    <div className="relative flex-1 w-full flex items-center gap-4">
+                        <div className="relative flex-1">
+                             <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                             <input type="text" placeholder="Search receipt or product..." className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-medium text-sm transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                        </div>
+                        <div className="flex bg-muted/50 p-1 rounded-2xl border border-border shrink-0">
+                           <button onClick={() => setSortBy('date_desc')} className={`p-2 rounded-xl transition-all ${sortBy === 'date_desc' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground'}`}><ArrowUpDown size={18} /></button>
+                           <button className="p-2 text-muted-foreground"><Filter size={18} /></button>
+                        </div>
                     </div>
                     
-                    <div className={styles.filterGroup}>
-                        <label>From:</label>
-                        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={styles.filterInput} />
-                    </div>
-                    
-                    <div className={styles.filterGroup}>
-                        <label>To:</label>
-                        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={styles.filterInput} />
-                    </div>
-
-                    <div className={styles.filterGroup}>
-                        <select className={styles.filterSelect} value={payMethodFilter} onChange={e => setPayMethodFilter(e.target.value)}>
-                            <option value="">All Payment Types</option>
-                            <option value="cash">Cash</option>
-                            <option value="transfer">Transfer</option>
-                            <option value="pos">P.O.S</option>
+                    <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+                        <input type="date" className="px-4 py-3 bg-muted/30 border border-border rounded-xl text-xs font-bold outline-none" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                        <input type="date" className="px-4 py-3 bg-muted/30 border border-border rounded-xl text-xs font-bold outline-none" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                        <select className="px-4 py-3 bg-muted/30 border border-border rounded-xl text-xs font-bold outline-none" value={payMethodFilter} onChange={e => setPayMethodFilter(e.target.value)}>
+                            <option value="">All Tenders</option>
+                            {['cash', 'transfer', 'pos'].map(m => <option key={m} value={m}>{m.toUpperCase()}</option>)}
                         </select>
-                    </div>
-
-                    <div className={styles.filterGroup}>
-                        <select className={styles.filterSelect} value={staffFilter} onChange={e => setStaffFilter(e.target.value)}>
-                            <option value="">All Staff</option>
-                            {uniqueStaff.map(s => (
-                                <option key={s.id} value={s.id}>{s.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className={styles.filterGroup}>
-                        <select className={styles.filterSelect} value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
-                            <option value="date_desc">Latest First</option>
-                            <option value="date_asc">Oldest First</option>
-                            <option value="amount_desc">Amount (High to Low)</option>
+                        <select className="px-4 py-3 bg-muted/30 border border-border rounded-xl text-xs font-bold outline-none" value={staffFilter} onChange={e => setStaffFilter(e.target.value)}>
+                            <option value="">All Personnel</option>
+                            {uniqueStaff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                     </div>
                 </div>
+            </Card>
 
-                {/* TABLE SECTION */}
-                <div className={`${styles.tableWrap} card`}>
-                    <table className={styles.table}>
+            {/* Data Table */}
+            <Card noPadding className="overflow-hidden rounded-[40px] border-border/50">
+                <div className="overflow-x-auto min-h-[500px]">
+                    <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr>
-                                <th>Transaction</th>
-                                <th>Product</th>
-                                <th>Price & Qty</th>
-                                <th>Total Amt</th>
-                                <th>Staff & Customer</th>
-                                <th>Status</th>
+                            <tr className="bg-muted/30 border-b border-border">
+                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Transaction</th>
+                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Product Detail</th>
+                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground text-center">Velocity</th>
+                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Fiscal Impact</th>
+                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Authentication</th>
+                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Personnel</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {isLoading ? (
-                                <tr>
-                                    <td colSpan={6} style={{ textAlign: 'center', padding: '3rem' }}>
-                                        <div className="spinner" style={{ margin: '0 auto' }}></div>
-                                        <p style={{ marginTop: '1rem', color: 'var(--color-text-tertiary)' }}>Loading records...</p>
-                                    </td>
-                                </tr>
-                            ) : filteredRecords.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className={styles.emptyState}>
-                                        <Filter size={40} opacity={0.15} />
-                                        <p>No transactions found matching your criteria</p>
-                                    </td>
-                                </tr>
-                            ) : filteredRecords.map((record) => (
-                                <tr key={record.id} className={styles.row}>
-                                    <td className={styles.txCell}>
-                                        <div className={styles.receiptTag}>#{record.receiptNumber}</div>
-                                        <span className={styles.txDate}>{record.date.toLocaleDateString()}</span>
-                                        <span className={styles.txTime}>{record.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                    </td>
-                                    
-                                    <td>
-                                        <div className={styles.productCell}>
-                                            {record.productImage ? (
-                                                <img src={record.productImage} className={styles.productImg} alt="" />
-                                            ) : (
-                                                <div className={styles.productImgPlaceholder}><Package size={16} /></div>
-                                            )}
-                                            <span className={styles.productName}>{record.productName}</span>
-                                        </div>
-                                    </td>
-                                    
-                                    <td>
-                                        <div className={styles.qtyCell}>
-                                            <span className={styles.unitPrice}>₦{record.unitPrice.toLocaleString()}</span>
-                                            <span className={styles.qtyTag}>× {record.quantity}</span>
-                                        </div>
-                                    </td>
-                                    
-                                    <td className={styles.totalCell}>
-                                        ₦{record.totalAmount.toLocaleString()}
-                                    </td>
-                                    
-                                    <td>
-                                        <div className={styles.peopleCell}>
-                                            <div className={styles.personRow} title="Staff">
-                                                <User size={12} /> {record.salespersonName}
-                                            </div>
-                                            <div className={styles.personRow} title="Customer" style={{ color: 'var(--color-text-tertiary)' }}>
-                                                <MapPin size={12} /> {record.customerName}
+                        <tbody className="divide-y divide-border/50">
+                            {filteredRecords.map((record) => (
+                                <tr key={record.id} className="group hover:bg-muted/20 transition-all">
+                                    <td className="px-6 py-6">
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-black text-primary tracking-widest bg-primary/5 px-2 py-0.5 rounded-lg w-fit mb-1.5">#{record.receiptNumber}</span>
+                                            <div className="flex items-center gap-2 text-muted-foreground">
+                                                <Clock size={12} />
+                                                <span className="text-[10px] font-bold uppercase">{record.date.toLocaleDateString()} {record.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                             </div>
                                         </div>
                                     </td>
-                                    
-                                    <td>
-                                        <div className={styles.statusCell}>
-                                            <span className={styles.payStatusBadge}>
-                                                <CheckCircle2 size={12} /> {record.paymentStatus}
-                                            </span>
-                                            <span className={`${styles.payMethodBadge} ${styles['pay_' + (record.paymentMethod || 'cash')]}`}>
-                                                {(record.paymentMethod || 'cash').toUpperCase()}
-                                            </span>
+                                    <td className="px-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-muted/40 rounded-xl overflow-hidden border border-border/50 flex items-center justify-center shrink-0">
+                                                {record.productImage ? <img src={record.productImage} className="w-full h-full object-cover" /> : <Package size={16} className="text-muted-foreground/30" />}
+                                            </div>
+                                            <span className="font-bold text-sm tracking-tight truncate max-w-[140px]">{record.productName}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 text-center">
+                                         <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-muted border border-border text-xs font-black italic">×{record.quantity}</span>
+                                    </td>
+                                    <td className="px-6">
+                                        <div className="flex flex-col">
+                                            <span className="text-lg font-black tracking-tighter italic">₦{record.totalAmount.toLocaleString()}</span>
+                                            <span className="text-[9px] font-bold text-muted-foreground opacity-50 uppercase tracking-widest">₦{record.unitPrice.toLocaleString()} / UNIT</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6">
+                                        <div className="flex flex-col gap-1.5">
+                                             <div className="flex items-center gap-1.5 text-emerald-500">
+                                                <CheckCircle2 size={12} strokeWidth={3} />
+                                                <span className="text-[10px] font-black uppercase tracking-widest">VERIFIED</span>
+                                             </div>
+                                             <div className={`text-[9px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full border border-border w-fit ${record.paymentMethod === 'cash' ? 'text-emerald-600' : record.paymentMethod === 'pos' ? 'text-blue-600' : 'text-amber-600'}`}>
+                                                {record.paymentMethod}
+                                             </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 whitespace-nowrap">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-slate-200 border border-border flex items-center justify-center text-[10px] font-black uppercase">{record.salespersonName?.slice(0, 2)}</div>
+                                            <div className="flex flex-col">
+                                                <span className="text-xs font-bold leading-none">{record.salespersonName}</span>
+                                                <span className="text-[9px] font-bold text-muted-foreground uppercase opacity-60">Served {record.customerName}</span>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -370,10 +263,11 @@ export const SalesRecordsPage: React.FC = () => {
                         </tbody>
                     </table>
                 </div>
-
-            </div>
-        </Layout>
+            </Card>
+        </div>
     );
 };
+
+import { XCircle, Wallet } from 'lucide-react';
 
 export default SalesRecordsPage;
