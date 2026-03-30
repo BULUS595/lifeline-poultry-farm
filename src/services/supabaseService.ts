@@ -789,16 +789,23 @@ export const supabaseDataService = {
    * Retail Sales Operations
    */
 
-  /** Fetch all retail sales — for Admin Sales History view */
-  async getRetailSales(): Promise<RetailSale[]> {
+  /** Fetch all retail sales — for Admin and Sales History view (Role Based) */
+  async getRetailSales(userProfile?: { id: string; role: string }): Promise<{ success: boolean; data: RetailSale[]; message: string }> {
     try {
-      const { data, error } = await supabase
-        .from('retail_sales')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200);
+      if (userProfile && (userProfile.role.includes('inventory') || userProfile.role === 'worker')) {
+         return { success: false, data: [], message: 'Unauthorized: Inventory staff cannot access sales data.' };
+      }
+
+      let query = supabase.from('retail_sales').select('*').order('created_at', { ascending: false }).limit(300);
+
+      // If sales role, restrict query to their own sales for privacy
+      if (userProfile && (userProfile.role === 'sales' || userProfile.role === 'sales_staff')) {
+         query = query.eq('salesperson_id', userProfile.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
-      return (data || []).map((d: any) => ({
+      const parsed = (data || []).map((d: any) => ({
         id: d.id,
         receiptNumber: d.receipt_number,
         items: d.items || [],
@@ -809,9 +816,10 @@ export const supabaseDataService = {
         createdAt: d.created_at,
         farmId: d.farm_id,
       }));
-    } catch (error) {
+      return { success: true, data: parsed, message: 'Sales records retrieved successfully' };
+    } catch (error: any) {
       console.error('Get retail sales error:', error);
-      return [];
+      return { success: false, data: [], message: error?.message || 'Database link error' };
     }
   },
 

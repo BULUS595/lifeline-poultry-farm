@@ -129,7 +129,7 @@ const AppRoutes: React.FC = () => {
       <Route
         path="/admin/sales"
         element={
-          <ProtectedRoute allowedRoles={['super_admin', 'admin', 'manager']}>
+          <ProtectedRoute allowedRoles={['super_admin', 'admin', 'manager', 'sales', 'sales_staff']}>
             <SalesRecordsPage />
           </ProtectedRoute>
         }

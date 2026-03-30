@@ -20,7 +20,7 @@ import { Card, Button, Badge, Input, Select, Label } from '../components/ui';
 import { Skeleton } from '../components/Skeleton';
 
 export const SalesRecordsPage: React.FC = () => {
-    const { isSuperAdmin, isManager } = useAuth();
+    const { user, isSuperAdmin, isManager } = useAuth();
     const [sales, setSales] = useState<RetailSale[]>([]);
     const [stockItems, setStockItems] = useState<StockItem[]>([]);
     const [staffDict, setStaffDict] = useState<Record<string, string>>({});
@@ -38,17 +38,30 @@ export const SalesRecordsPage: React.FC = () => {
         setIsLoading(true);
         setHasError(false);
         try {
-            const [salesData, stockData, { data: usersData }] = await Promise.all([
-                supabaseDataService.getRetailSales(),
+            let salesRes;
+            if (user) {
+                salesRes = await supabaseDataService.getRetailSales({ id: user.id, role: user.role });
+            } else {
+                salesRes = { success: false, data: [], message: 'No user' };
+            }
+
+            const [stockData, { data: usersData }] = await Promise.all([
                 supabaseDataService.getAllStockItems(),
                 supabase.from('users').select('id, name')
             ]);
-            setSales(salesData || []);
+            
+            if (!salesRes.success && user?.role && user.role.includes('inventory')) {
+                setHasError(true);
+            }
+
+            setSales(salesRes.data || []);
             setStockItems(stockData || []);
             if (usersData) {
-                const sDict: Record<string, string> = {};
-                usersData.forEach(u => sDict[u.id] = u.name);
-                setStaffDict(sDict);
+                const dict: Record<string, string> = {};
+                usersData.forEach((u: any) => {
+                    dict[u.id] = u.name;
+                });
+                setStaffDict(dict);
             }
         } catch (err) {
             console.error('Fiscal link error:', err);
@@ -56,7 +69,7 @@ export const SalesRecordsPage: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [user]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
