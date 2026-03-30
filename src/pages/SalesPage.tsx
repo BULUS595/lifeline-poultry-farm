@@ -38,8 +38,8 @@ export const SalesPage: React.FC = () => {
     const [showReceipt, setShowReceipt] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [hasError, setHasError] = useState(false);
     const [isCartOpen, setIsCartOpen] = useState(false);
-    
     useEffect(() => {
         const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
         return () => clearTimeout(t);
@@ -47,11 +47,13 @@ export const SalesPage: React.FC = () => {
 
     const loadStock = useCallback(async () => {
         setIsLoading(true);
+        setHasError(false);
         try {
             const data = await supabaseDataService.getStockItems();
-            setStock(data);
+            setStock(data || []);
         } catch (e) {
             console.error('Terminal stock link fail:', e);
+            setHasError(true);
         } finally {
             setIsLoading(false);
         }
@@ -200,6 +202,12 @@ export const SalesPage: React.FC = () => {
                     {isLoading ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-10">
                             {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} height={260} borderRadius={48} />)}
+                        </div>
+                    ) : hasError ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center py-20 bg-rose-500/5 rounded-[56px] border-4 border-dashed border-rose-500/20 opacity-80">
+                            <X size={140} strokeWidth={1} className="mb-8 opacity-40 text-rose-500" />
+                            <h3 className="text-3xl font-black italic uppercase tracking-tighter text-rose-500">Terminal Link Severed</h3>
+                            <p className="max-w-md mx-auto text-xs font-black text-rose-500/80 mt-4 uppercase tracking-[0.3em] leading-relaxed italic">System unable to fetch product catalog. Verify connection.</p>
                         </div>
                     ) : filteredStock.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-center py-20 bg-muted/5 rounded-[56px] border-4 border-dashed border-border/40 opacity-40">

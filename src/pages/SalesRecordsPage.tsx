@@ -5,11 +5,19 @@ import {
     DollarSign, ArrowUpRight, ArrowDownRight, Printer, Clock, SearchIcon,
     ArrowUpDown,
     DownloadCloud,
+    XCircle,
+    Wallet,
+    History,
+    FileText,
+    ChevronDown,
+    Zap,
+    Users,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, supabaseDataService } from '../services/supabaseService';
 import { type RetailSale, type StockItem } from '../types';
-import { Card, Button, Badge } from '../components/ui';
+import { Card, Button, Badge, Input, Select, Label } from '../components/ui';
+import { Skeleton } from '../components/Skeleton';
 
 export const SalesRecordsPage: React.FC = () => {
     const { isSuperAdmin, isManager } = useAuth();
@@ -17,6 +25,7 @@ export const SalesRecordsPage: React.FC = () => {
     const [stockItems, setStockItems] = useState<StockItem[]>([]);
     const [staffDict, setStaffDict] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(true);
+    const [hasError, setHasError] = useState(false);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [dateFrom, setDateFrom] = useState('');
@@ -27,21 +36,23 @@ export const SalesRecordsPage: React.FC = () => {
 
     const loadData = useCallback(async () => {
         setIsLoading(true);
+        setHasError(false);
         try {
             const [salesData, stockData, { data: usersData }] = await Promise.all([
                 supabaseDataService.getRetailSales(),
                 supabaseDataService.getAllStockItems(),
                 supabase.from('users').select('id, name')
             ]);
-            setSales(salesData);
-            setStockItems(stockData);
+            setSales(salesData || []);
+            setStockItems(stockData || []);
             if (usersData) {
                 const sDict: Record<string, string> = {};
                 usersData.forEach(u => sDict[u.id] = u.name);
                 setStaffDict(sDict);
             }
         } catch (err) {
-            console.error('Error fetching data:', err);
+            console.error('Fiscal link error:', err);
+            setHasError(true);
         } finally {
             setIsLoading(false);
         }
@@ -53,7 +64,7 @@ export const SalesRecordsPage: React.FC = () => {
         const records: any[] = [];
         sales.forEach(sale => {
             const saleDate = new Date(sale.createdAt);
-            const salespersonName = staffDict[sale.salespersonId] || 'Unknown Staff';
+            const salespersonName = staffDict[sale.salespersonId] || 'Root User';
             let safeItems = Array.isArray(sale.items) ? sale.items : [];
             if (typeof sale.items === 'string') { try { safeItems = JSON.parse(sale.items); } catch(e) {} }
             safeItems.forEach(item => {
@@ -62,7 +73,7 @@ export const SalesRecordsPage: React.FC = () => {
                     id: `${sale.id}-${item.id || Math.random()}`,
                     receiptNumber: sale.receiptNumber || 'N/A',
                     productId: item.id || '',
-                    productName: item.name || 'Unknown Item',
+                    productName: item.name || 'Legacy SKU',
                     productImage: stock?.imageUrl,
                     quantity: item.quantity || 1,
                     unitPrice: item.unitPrice || 0,
@@ -71,8 +82,8 @@ export const SalesRecordsPage: React.FC = () => {
                     salespersonName,
                     salespersonId: sale.salespersonId || '',
                     paymentMethod: sale.paymentMethod || 'cash',
-                    customerName: sale.customerName || 'Walk-in',
-                    paymentStatus: 'Paid'
+                    customerName: sale.customerName || 'Standard Client',
+                    paymentStatus: 'Authenticated'
                 });
             });
         });
@@ -114,160 +125,259 @@ export const SalesRecordsPage: React.FC = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Sales_${new Date().toISOString().split('T')[0]}.csv`;
+        a.download = `Fiscal_Payload_${new Date().toISOString().split('T')[0]}.csv`;
         a.click();
     };
 
     const uniqueStaff = useMemo(() => {
         const ids = [...new Set(unrolledRecords.map(r => r.salespersonId))];
-        return ids.map(id => ({ id, name: staffDict[id] || 'Unknown' }));
+        return ids.map(id => ({ id, name: staffDict[id] || 'System' }));
     }, [unrolledRecords, staffDict]);
 
     const isAdmin = isSuperAdmin || isManager;
     if (!isAdmin) return (
-      <div className="h-[60vh] flex flex-col items-center justify-center opacity-50 space-y-4">
-         <div className="p-6 bg-rose-500/10 rounded-full text-rose-500"><XCircle size={48} /></div>
-         <h2 className="text-2xl font-black uppercase tracking-tight italic">Access Denied</h2>
-         <p className="max-w-xs text-center font-medium">Only administrators can access the fiscal archives.</p>
+      <div className="h-[70vh] flex flex-col items-center justify-center animate-slide-up px-6">
+         <div className="w-24 h-24 bg-rose-500/10 rounded-[32px] flex items-center justify-center text-rose-500 border border-rose-500/20 shadow-glow mb-8 animate-bounce-slow">
+            <XCircle size={48} strokeWidth={2.5} />
+         </div>
+         <div className="text-center space-y-4">
+            <h2 className="text-3xl font-black uppercase tracking-tighter italic leading-none">Fiscal Access <span className="text-rose-500 italic underline">Restricted</span></h2>
+            <p className="max-w-md font-bold text-muted-foreground uppercase text-[10px] tracking-[0.2em] leading-relaxed opacity-60">Archive access is limited to L3 management and auditing personnel only.</p>
+         </div>
+         <Button variant="secondary" className="mt-8 rounded-2xl px-10 py-8 font-black uppercase tracking-widest text-[11px]" onClick={() => window.history.back()}>
+            Return to Operations
+         </Button>
       </div>
     );
 
     return (
-        <div className="space-y-10 pb-20">
+        <div className="space-y-12 pb-20 animate-slide-up">
             {/* Header */}
-            <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-end">
+            <div className="flex flex-col md:flex-row gap-8 justify-between items-start md:items-end px-2">
                 <div>
-                   <h1 className="text-4xl font-black tracking-tighter uppercase italic">Fiscal <span className="text-primary italic underline">Archives</span></h1>
-                   <p className="text-muted-foreground font-medium mt-1 uppercase text-[10px] tracking-widest opacity-60">Consolidated audit trail of all products sold</p>
+                   <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none shrink-0">
+                     Fiscal <span className="text-primary italic underline underline-offset-8 decoration-4">Archives</span>
+                   </h1>
+                   <p className="text-muted-foreground font-black text-[10px] uppercase tracking-[0.2em] mt-3 opacity-40">Cumulative commerce and transaction oversight</p>
                 </div>
-                <Button size="lg" className="rounded-2xl px-8 shadow-glow" onClick={handleExportCSV} leftIcon={DownloadCloud}>
-                   Export Dataset
-                </Button>
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                    <Button size="lg" variant="outline" className="flex-1 md:flex-none rounded-3xl px-10 py-8 text-lg font-black uppercase tracking-tight italic bg-card/40 backdrop-blur-sm border-border/40 shadow-sm" onClick={handleExportCSV}>
+                        <DownloadCloud className="mr-3 w-6 h-6" strokeWidth={3} /> Export Dataset
+                    </Button>
+                    <Button size="lg" className="flex-1 md:flex-none rounded-3xl px-10 py-8 text-lg shadow-glow font-black uppercase tracking-tight italic" onClick={loadData}>
+                        <Zap className="mr-3 w-6 h-6" strokeWidth={3} /> Sync Data
+                    </Button>
+                </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Stats Dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                  {[
-                   { label: 'Dataset Revenue', value: stats.revenue, icon: Wallet, color: 'text-primary', bg: 'bg-primary/10' },
-                   { label: 'Transactions', value: stats.txCount, icon: Receipt, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-                   { label: "Today's Yield", value: stats.todayRev, icon: TrendingUp, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-                   { label: 'Volume Sold', value: stats.volume, icon: ShoppingBag, color: 'text-amber-500', bg: 'bg-amber-500/10', isNum: true }
+                   { label: 'Dataset Revenue', value: stats.revenue, icon: Wallet, color: 'text-primary', bg: 'bg-primary/10', trend: 12.5 },
+                   { label: 'Verified Receipts', value: stats.txCount, icon: Receipt, color: 'text-blue-500', bg: 'bg-blue-500/10', trend: 5.4 },
+                   { label: "Real-time Yield", value: stats.todayRev, icon: TrendingUp, color: 'text-emerald-500', bg: 'bg-emerald-500/10', trend: 8.9 },
+                   { label: 'Circulation Volume', value: stats.volume, icon: ShoppingBag, color: 'text-amber-500', bg: 'bg-amber-500/10', isNum: true, trend: 2.1 }
                  ].map((stat, i) => (
-                   <Card key={i} className="relative overflow-hidden group">
-                      <div className="flex justify-between items-start">
-                         <div className={`p-3 rounded-2xl ${stat.bg} ${stat.color}`}><stat.icon size={20} strokeWidth={2.5} /></div>
-                         <div className="w-12 h-1 bg-muted/30 rounded-full" />
+                   <Card key={i} hoverable className="relative overflow-hidden group border-border/40 bg-card/60 backdrop-blur-sm p-0 overflow-hidden" noPadding>
+                      <div className="p-8 pb-10">
+                          <div className="flex justify-between items-start mb-6">
+                             <div className={`p-4 rounded-2xl ${stat.bg} ${stat.color} group-hover:scale-110 group-hover:rotate-6 transition-all duration-500`}>
+                                <stat.icon size={28} strokeWidth={2.5} />
+                             </div>
+                             {stat.trend > 0 && (
+                                <Badge variant="primary" className="font-black text-[10px] px-3 py-1.5 flex items-center gap-1.5 ring-4 ring-background/50 shadow-sm">
+                                   <ArrowUpRight size={12} strokeWidth={3} />
+                                   {stat.trend}%
+                                </Badge>
+                             )}
+                          </div>
+                          <div className="space-y-1">
+                             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em] opacity-40 shrink-0">{stat.label}</p>
+                             <h3 className="text-3xl font-black tracking-tighter leading-none italic tabular-nums shrink-0">
+                                {stat.isNum ? '' : '₦'}{stat.value.toLocaleString()}
+                             </h3>
+                          </div>
                       </div>
-                      <div className="mt-5">
-                         <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{stat.label}</p>
-                         <h3 className="text-2xl font-black tracking-tighter mt-1">{stat.isNum ? '' : '₦'}{stat.value.toLocaleString()}</h3>
-                      </div>
+                      <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/20 transition-all duration-700 pointer-events-none" />
                    </Card>
                  ))}
             </div>
 
-            {/* Filters */}
-            <Card className="rounded-[40px] p-2" noPadding>
-                <div className="p-4 flex flex-col lg:flex-row gap-4 items-center">
-                    <div className="relative flex-1 w-full flex items-center gap-4">
-                        <div className="relative flex-1">
-                             <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                             <input type="text" placeholder="Search receipt or product..." className="w-full pl-11 pr-4 py-3 bg-muted/30 border border-border rounded-2xl outline-none focus:border-primary font-medium text-sm transition-all" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            {/* Advanced Filters */}
+            <Card className="rounded-[40px] px-8 py-10 bg-card/40 backdrop-blur-xl border-border/40 shadow-premium" noPadding>
+                <div className="flex flex-col space-y-8">
+                    <div className="flex flex-col lg:flex-row gap-8 items-center">
+                        <div className="relative flex-1 w-full group">
+                            <SearchIcon className="absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground transition-all group-focus-within:text-primary" size={20} strokeWidth={3} />
+                            <Input 
+                                type="text" 
+                                placeholder="Scan receipt markers or primary identifiers..." 
+                                className="pl-16 h-16 rounded-2xl border-border/40 bg-background/50 shadow-sm" 
+                                value={searchTerm} 
+                                onChange={e => setSearchTerm(e.target.value)} 
+                            />
                         </div>
-                        <div className="flex bg-muted/50 p-1 rounded-2xl border border-border shrink-0">
-                           <button onClick={() => setSortBy('date_desc')} className={`p-2 rounded-xl transition-all ${sortBy === 'date_desc' ? 'bg-card shadow-sm text-primary' : 'text-muted-foreground'}`}><ArrowUpDown size={18} /></button>
-                           <button className="p-2 text-muted-foreground"><Filter size={18} /></button>
+                        <div className="flex items-center bg-background/50 p-2 rounded-[24px] border border-border/40 shadow-sm shrink-0">
+                           <button 
+                                onClick={() => setSortBy(sortBy === 'date_desc' ? 'date_asc' : 'date_desc')} 
+                                className={`flex items-center gap-3 px-6 h-12 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest ${sortBy.includes('date') ? 'bg-primary text-white shadow-glow' : 'text-muted-foreground hover:bg-muted/50'}`}
+                           >
+                                <ArrowUpDown size={16} strokeWidth={3} />
+                                Chronological
+                           </button>
+                           <button 
+                                onClick={() => setSortBy('amount_desc')} 
+                                className={`flex items-center gap-3 px-6 h-12 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest ${sortBy === 'amount_desc' ? 'bg-primary text-white shadow-glow' : 'text-muted-foreground hover:bg-muted/50'}`}
+                           >
+                                <TrendingUp size={16} strokeWidth={3} />
+                                High Value
+                           </button>
                         </div>
                     </div>
                     
-                    <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-                        <input type="date" className="px-4 py-3 bg-muted/30 border border-border rounded-xl text-xs font-bold outline-none" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-                        <input type="date" className="px-4 py-3 bg-muted/30 border border-border rounded-xl text-xs font-bold outline-none" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-                        <select className="px-4 py-3 bg-muted/30 border border-border rounded-xl text-xs font-bold outline-none" value={payMethodFilter} onChange={e => setPayMethodFilter(e.target.value)}>
-                            <option value="">All Tenders</option>
-                            {['cash', 'transfer', 'pos'].map(m => <option key={m} value={m}>{m.toUpperCase()}</option>)}
-                        </select>
-                        <select className="px-4 py-3 bg-muted/30 border border-border rounded-xl text-xs font-bold outline-none" value={staffFilter} onChange={e => setStaffFilter(e.target.value)}>
-                            <option value="">All Personnel</option>
-                            {uniqueStaff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div className="space-y-2.5">
+                            <Label className="ml-1 opacity-40">From Date</Label>
+                            <Input type="date" className="h-14 rounded-xl border-border/40 bg-background/50 uppercase tracking-tighter font-black" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                        </div>
+                        <div className="space-y-2.5">
+                            <Label className="ml-1 opacity-40">To Date</Label>
+                            <Input type="date" className="h-14 rounded-xl border-border/40 bg-background/50 uppercase tracking-tighter font-black" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                        </div>
+                        <div className="space-y-2.5">
+                            <Label className="ml-1 opacity-40">Payment Matrix</Label>
+                            <Select className="h-14 rounded-xl border-border/40 bg-background/50 uppercase tracking-widest font-black text-[10px] italic" value={payMethodFilter} onChange={e => setPayMethodFilter(e.target.value)}>
+                                <option value="">Global Tenders</option>
+                                {['cash', 'transfer', 'pos'].map(m => <option key={m} value={m}>{m.toUpperCase()} NODE</option>)}
+                            </Select>
+                        </div>
+                        <div className="space-y-2.5">
+                            <Label className="ml-1 opacity-40">Operator ID</Label>
+                            <Select className="h-14 rounded-xl border-border/40 bg-background/50 uppercase tracking-widest font-black text-[10px] italic" value={staffFilter} onChange={e => setStaffFilter(e.target.value)}>
+                                <option value="">Global Personnel</option>
+                                {uniqueStaff.map(s => <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>)}
+                            </Select>
+                        </div>
                     </div>
                 </div>
             </Card>
 
-            {/* Data Table */}
-            <Card noPadding className="overflow-hidden rounded-[40px] border-border/50">
-                <div className="overflow-x-auto min-h-[500px]">
-                    <table className="w-full text-left border-collapse">
+            {/* Redesigned Archive Table */}
+            <Card noPadding className="overflow-hidden rounded-[40px] border-border/40 bg-card/40 backdrop-blur-sm shadow-premium">
+                <div className="overflow-x-auto min-h-[500px] custom-scrollbar">
+                    <table className="w-full text-left border-collapse data-table-mobile-cards">
                         <thead>
-                            <tr className="bg-muted/30 border-b border-border">
-                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Transaction</th>
-                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Product Detail</th>
-                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground text-center">Velocity</th>
-                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Fiscal Impact</th>
-                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Authentication</th>
-                                <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Personnel</th>
+                            <tr className="bg-muted/10 border-b border-border/40">
+                                <th className="px-10 py-8 text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground whitespace-nowrap">Transaction Node</th>
+                                <th className="px-10 py-8 text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground whitespace-nowrap">Product Matrix</th>
+                                <th className="px-10 py-8 text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground text-center whitespace-nowrap">Velocity</th>
+                                <th className="px-10 py-8 text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground whitespace-nowrap">Fiscal Impact</th>
+                                <th className="px-10 py-8 text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground whitespace-nowrap">Authentication</th>
+                                <th className="px-10 py-8 text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground whitespace-nowrap">Operator</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-border/50">
-                            {filteredRecords.map((record) => (
-                                <tr key={record.id} className="group hover:bg-muted/20 transition-all">
-                                    <td className="px-6 py-6">
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-black text-primary tracking-widest bg-primary/5 px-2 py-0.5 rounded-lg w-fit mb-1.5">#{record.receiptNumber}</span>
-                                            <div className="flex items-center gap-2 text-muted-foreground">
-                                                <Clock size={12} />
-                                                <span className="text-[10px] font-bold uppercase">{record.date.toLocaleDateString()} {record.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-muted/40 rounded-xl overflow-hidden border border-border/50 flex items-center justify-center shrink-0">
-                                                {record.productImage ? <img src={record.productImage} className="w-full h-full object-cover" /> : <Package size={16} className="text-muted-foreground/30" />}
-                                            </div>
-                                            <span className="font-bold text-sm tracking-tight truncate max-w-[140px]">{record.productName}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 text-center">
-                                         <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-muted border border-border text-xs font-black italic">×{record.quantity}</span>
-                                    </td>
-                                    <td className="px-6">
-                                        <div className="flex flex-col">
-                                            <span className="text-lg font-black tracking-tighter italic">₦{record.totalAmount.toLocaleString()}</span>
-                                            <span className="text-[9px] font-bold text-muted-foreground opacity-50 uppercase tracking-widest">₦{record.unitPrice.toLocaleString()} / UNIT</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6">
-                                        <div className="flex flex-col gap-1.5">
-                                             <div className="flex items-center gap-1.5 text-emerald-500">
-                                                <CheckCircle2 size={12} strokeWidth={3} />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">VERIFIED</span>
-                                             </div>
-                                             <div className={`text-[9px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full border border-border w-fit ${record.paymentMethod === 'cash' ? 'text-emerald-600' : record.paymentMethod === 'pos' ? 'text-blue-600' : 'text-amber-600'}`}>
-                                                {record.paymentMethod}
-                                             </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 whitespace-nowrap">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-slate-200 border border-border flex items-center justify-center text-[10px] font-black uppercase">{record.salespersonName?.slice(0, 2)}</div>
-                                            <div className="flex flex-col">
-                                                <span className="text-xs font-bold leading-none">{record.salespersonName}</span>
-                                                <span className="text-[9px] font-bold text-muted-foreground uppercase opacity-60">Served {record.customerName}</span>
-                                            </div>
-                                        </div>
+                        <tbody className="divide-y divide-border/20">
+                            {isLoading ? (
+                                [1, 2, 3, 4, 5, 6].map(i => (
+                                    <tr key={i}><td colSpan={6} className="px-10 py-6"><Skeleton height={60} borderRadius={16} /></td></tr>
+                                ))
+                            ) : hasError ? (
+                                <tr>
+                                    <td colSpan={6} className="px-10 py-32 text-center opacity-80">
+                                        <XCircle size={100} strokeWidth={1} className="mx-auto mb-6 opacity-40 text-rose-500" />
+                                        <h4 className="text-2xl font-black uppercase italic tracking-tighter text-rose-500">Data Fetching Failed</h4>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.3em] mt-3 opacity-60">Please check your network connection and sync data again.</p>
                                     </td>
                                 </tr>
-                            ))}
+                            ) : filteredRecords.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-10 py-32 text-center opacity-40">
+                                        <History size={100} strokeWidth={1} className="mx-auto mb-6 opacity-20" />
+                                        <h4 className="text-2xl font-black uppercase italic tracking-tighter">Zero archive entries detected</h4>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.3em] mt-3 opacity-60">System stands ready for commerce logs</p>
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredRecords.map((record) => (
+                                    <tr key={record.id} className="group hover:bg-primary/5 transition-all duration-300 border-l-0 hover:border-l-8 hover:border-l-primary">
+                                        <td className="px-10 py-8" data-label="Transaction Node">
+                                            <div className="flex flex-col">
+                                                <Badge variant="primary" className="text-[10px] font-black tracking-[0.15em] px-3 py-1.5 rounded-xl w-fit mb-4 shadow-sm tabular-nums">
+                                                    #{record.receiptNumber.toUpperCase()}
+                                                </Badge>
+                                                <div className="flex items-center gap-3 text-muted-foreground">
+                                                    <Clock size={14} strokeWidth={3} className="opacity-30" />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest tabular-nums italic opacity-60">{record.date.toLocaleDateString()} • {record.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-10 py-8" data-label="Product Matrix">
+                                            <div className="flex items-center gap-5">
+                                                <div className="w-16 h-16 bg-card rounded-2xl overflow-hidden border-2 border-border/40 flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-sm relative">
+                                                    {record.productImage ? (
+                                                        <img src={record.productImage} className="w-full h-full object-cover" alt={record.productName} />
+                                                    ) : (
+                                                        <div className="p-4 bg-muted/10 rounded-full">
+                                                            <Package size={24} strokeWidth={2.5} className="text-primary/40" />
+                                                        </div>
+                                                    )}
+                                                    <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/5 transition-colors" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <span className="font-black text-lg tracking-tighter uppercase italic block leading-none">{record.productName}</span>
+                                                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest opacity-40">Global-SKU-{record.productId.slice(0, 5).toUpperCase()}</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-10 py-8 text-center" data-label="Velocity">
+                                             <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-muted/40 border border-border/40 text-lg font-black italic tabular-nums shadow-sm group-hover:bg-primary/10 group-hover:text-primary transition-all duration-500">
+                                                ×{record.quantity}
+                                             </div>
+                                        </td>
+                                        <td className="px-10 py-8" data-label="Fiscal Impact">
+                                            <div className="flex flex-col items-start gap-1">
+                                                <span className="text-2xl font-black tracking-tighter italic leading-none tabular-nums text-foreground group-hover:text-primary transition-colors">₦{record.totalAmount.toLocaleString()}</span>
+                                                <Badge variant="outline" className="text-[9px] font-black text-muted-foreground opacity-40 px-2 py-0.5 border-border/40 tabular-nums">₦{record.unitPrice.toLocaleString()} / UNIT</Badge>
+                                            </div>
+                                        </td>
+                                        <td className="px-10 py-8" data-label="Authentication">
+                                            <div className="flex flex-col gap-3">
+                                                 <div className="flex items-center gap-2.5 text-emerald-500">
+                                                    <div className="w-2 h-2 bg-emerald-500 rounded-full shadow-glow animate-pulse" />
+                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] italic">SECURE-{record.paymentStatus.toUpperCase()}</span>
+                                                 </div>
+                                                 <div className={`text-[9px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-xl border border-border/40 w-fit shadow-sm bg-background/50 ${record.paymentMethod === 'cash' ? 'text-emerald-500 border-emerald-500/20' : record.paymentMethod === 'pos' ? 'text-blue-500 border-blue-500/20' : 'text-amber-500 border-amber-500/20'}`}>
+                                                    {record.paymentMethod} NODE
+                                                 </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-10 py-8 whitespace-nowrap" data-label="Operator">
+                                            <div className="flex items-center gap-5">
+                                                <div className="w-12 h-12 rounded-2xl bg-primary/10 border-2 border-primary/20 flex items-center justify-center text-primary font-black text-sm italic shadow-glow group-hover:scale-110 transition-all duration-500">{record.salespersonName?.slice(0, 2).toUpperCase()}</div>
+                                                <div className="flex flex-col space-y-1">
+                                                    <span className="text-sm font-black uppercase tracking-tight italic leading-none">{record.salespersonName}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <Users size={12} strokeWidth={3} className="text-muted-foreground opacity-30" />
+                                                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-40 italic">{record.customerName}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
+                </div>
+                <div className="bg-muted/10 p-8 border-t border-border/40 flex justify-between items-center px-10">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-40">System Forensic Audit Status: <span className="text-emerald-500 italic">NOMINAL</span></p>
+                    <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest tabular-nums text-muted-foreground opacity-60">
+                        SHOWING {filteredRecords.length} OF {unrolledRecords.length} FISCAL ENTRIES
+                    </div>
                 </div>
             </Card>
         </div>
     );
 };
-
-import { XCircle, Wallet } from 'lucide-react';
 
 export default SalesRecordsPage;

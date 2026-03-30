@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { Skeleton } from './components/Skeleton';
 import { DashboardLayout } from './layouts/DashboardLayout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Lazy loading all pages
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -55,12 +56,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
   }
 
   return useLayout ? <DashboardLayout>{children}</DashboardLayout> : <>{children}</>;
-};
-
-// Route wrappers with parameter extraction
-const MortalityLogsRoute: React.FC = () => {
-  const { farmId } = useParams<{ farmId: string }>();
-  return farmId ? <MortalityLogsPage farmId={farmId} /> : <Navigate to="/dashboard" />;
 };
 
 const FeedingLogsRoute: React.FC = () => {
@@ -212,17 +207,19 @@ const AppRoutes: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <Router>
-      <ThemeProvider>
-        <AuthProvider>
-          <NotificationProvider>
-            <Suspense fallback={<PageLoader />}>
-              <AppRoutes />
-            </Suspense>
-          </NotificationProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <ThemeProvider>
+          <AuthProvider>
+            <NotificationProvider>
+              <Suspense fallback={<PageLoader />}>
+                <AppRoutes />
+              </Suspense>
+            </NotificationProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </Router>
+    </ErrorBoundary>
   );
 };
 
