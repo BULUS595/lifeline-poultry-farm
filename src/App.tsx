@@ -9,7 +9,7 @@ import { DashboardLayout } from './layouts/DashboardLayout';
 // Lazy loading all pages
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
-const MortalityLogsPage = lazy(() => import('./pages/MortalityLogsPage').then(m => ({ default: m.MortalityLogsPage })));
+const MortalityPage = lazy(() => import('./pages/Mortality/MortalityPage').then(m => ({ default: m.MortalityPage })));
 const FeedingLogsPage = lazy(() => import('./pages/FeedingLogsPage').then(m => ({ default: m.FeedingLogsPage })));
 const ExpensesPage = lazy(() => import('./pages/ExpensesPage').then(m => ({ default: m.ExpensesPage })));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
@@ -164,7 +164,7 @@ const AppRoutes: React.FC = () => {
         path="/farms/:farmId/mortality-logs"
         element={
           <ProtectedRoute allowedRoles={['super_admin', 'admin', 'manager', 'inventory_officer', 'inventory_staff']}>
-            <MortalityLogsRoute />
+            <MortalityPage />
           </ProtectedRoute>
         }
       />
