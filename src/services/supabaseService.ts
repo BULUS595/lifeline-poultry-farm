@@ -876,6 +876,25 @@ export const supabaseDataService = {
 
     return channel;
   },
+
+  async clearOperationalData() {
+    try {
+      // Nukes the transactional records to start fresh for launch
+      const results = await Promise.all([
+        supabase.from('retail_sales').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('mortality_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('feeding_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('stock_activity_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      ]);
+      const error = results.find(r => r.error);
+      if (error) throw error.error;
+      return { success: true };
+    } catch (err: any) {
+      console.error('Core reset failed:', err);
+      return { success: false, message: err.message };
+    }
+  }
 };
 
 /**

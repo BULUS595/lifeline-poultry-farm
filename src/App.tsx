@@ -8,7 +8,11 @@ import { DashboardLayout } from './layouts/DashboardLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Lazy loading all pages
-const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
+import { SalesPage } from './pages/SalesPage';
+import { SalesRecordsPage } from './pages/SalesRecordsPage';
+import { StoragePage } from './pages/StoragePage';
+import { AdminStockPage } from './pages/AdminStockPage';
+import { LoginPage } from './pages/LoginPage';
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const MortalityPage = lazy(() => import('./pages/Mortality/MortalityPage').then(m => ({ default: m.MortalityPage })));
 const FeedingLogsPage = lazy(() => import('./pages/FeedingLogsPage').then(m => ({ default: m.FeedingLogsPage })));
@@ -16,10 +20,6 @@ const ExpensesPage = lazy(() => import('./pages/ExpensesPage').then(m => ({ defa
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
 const UserManagementPage = lazy(() => import('./pages/UserManagementPage').then(m => ({ default: m.UserManagementPage })));
 const ActivityLogsPage = lazy(() => import('./pages/ActivityLogsPage').then(m => ({ default: m.ActivityLogsPage })));
-const SalesPage = lazy(() => import('./pages/SalesPage').then(m => ({ default: m.SalesPage })));
-const StoragePage = lazy(() => import('./pages/StoragePage').then(m => ({ default: m.StoragePage })));
-const AdminStockPage = lazy(() => import('./pages/AdminStockPage').then(m => ({ default: m.AdminStockPage })));
-const SalesRecordsPage = lazy(() => import('./pages/SalesRecordsPage').then(m => ({ default: m.SalesRecordsPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
 
 const PageLoader = () => (
