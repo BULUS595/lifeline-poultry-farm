@@ -437,19 +437,19 @@ export const supabaseDataService = {
 
   _mapStockItem(item: any): StockItem {
     return {
-      id: item.id,
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: item.unit_price,
-      unit: item.unit,
-      minThreshold: item.min_threshold,
+      id: item.id || '',
+      name: item.name || 'Unnamed Product',
+      quantity: item.quantity || 0,
+      unitPrice: item.unit_price || 0,
+      unit: item.unit || 'units',
+      minThreshold: item.min_threshold || 0,
       imageUrl: item.image_url,
       status: item.status || 'PENDING_APPROVAL',
-      submittedBy: item.submitted_by,
-      submittedByName: item.submitted_by_name,
+      submittedBy: item.submitted_by || '',
+      submittedByName: item.submitted_by_name || 'System',
       rejectionComment: item.rejection_comment,
-      lastUpdated: item.last_updated,
-      farmId: item.farm_id,
+      lastUpdated: item.last_updated || new Date().toISOString(),
+      farmId: item.farm_id || '1',
       deletedBy: item.deleted_by,
       deletedAt: item.deleted_at,
     };
@@ -806,15 +806,15 @@ export const supabaseDataService = {
       const { data, error } = await query;
       if (error) throw error;
       const parsed = (data || []).map((d: any) => ({
-        id: d.id,
-        receiptNumber: d.receipt_number,
+        id: d.id || '',
+        receiptNumber: d.receipt_number || 'N/A',
         items: d.items || [],
-        totalPrice: d.total_price,
-        paymentMethod: d.payment_method,
-        customerName: d.customer_name,
-        salespersonId: d.salesperson_id,
-        createdAt: d.created_at,
-        farmId: d.farm_id,
+        totalPrice: d.total_price || 0,
+        paymentMethod: d.payment_method || 'cash',
+        customerName: d.customer_name || 'Direct Client',
+        salespersonId: d.salesperson_id || '',
+        createdAt: d.created_at || new Date().toISOString(),
+        farmId: d.farm_id || '1',
       }));
       return { success: true, data: parsed, message: 'Sales records retrieved successfully' };
     } catch (error: any) {
@@ -836,15 +836,15 @@ export const supabaseDataService = {
 
       // Step 2: Return formatted representation
       return {
-        id: data.id,
-        receiptNumber: data.receiptNumber,
-        items: data.items,
-        totalPrice: data.totalPrice,
-        paymentMethod: data.paymentMethod,
-        customerName: data.customerName,
-        salespersonId: data.salespersonId,
-        createdAt: data.createdAt,
-        farmId: data.farmId
+        id: data.id || '',
+        receiptNumber: data.receiptNumber || 'N/A',
+        items: data.items || [],
+        totalPrice: data.totalPrice || 0,
+        paymentMethod: data.paymentMethod || 'cash',
+        customerName: data.customerName || 'Direct Client',
+        salespersonId: data.salespersonId || '',
+        createdAt: data.createdAt || new Date().toISOString(),
+        farmId: data.farmId || '1'
       };
     } catch (error: any) {
       console.error('Record retail sale transaction error:', error);

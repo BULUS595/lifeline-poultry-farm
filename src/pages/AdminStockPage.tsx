@@ -56,12 +56,12 @@ export const AdminStockPage: React.FC = () => {
     const loadSales = useCallback(async () => {
         setSalesLoading(true);
         try {
-            const data = await supabaseDataService.getRetailSales();
-            setSales(data);
+            const res = await supabaseDataService.getRetailSales(user ? { id: user.id, role: user.role } : undefined);
+            if (res.success) setSales(res.data);
         } finally {
             setSalesLoading(false);
         }
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         loadStock();
@@ -317,13 +317,13 @@ export const AdminStockPage: React.FC = () => {
                                     <div className="flex flex-wrap items-center gap-4 pt-6 border-t border-border/20">
                                        {item.status === 'PENDING_APPROVAL' && (
                                           <div className="flex items-center gap-4 flex-1">
-                                             <Button size="lg" className="rounded-2xl h-14 bg-emerald-500 hover:bg-emerald-600 border-none px-10 shadow-glow font-black uppercase tracking-widest text-[11px] italic" leftIcon={CheckCircle2} onClick={() => approve(item)}>Authorize Node</Button>
-                                             <Button size="lg" variant="outline" className="rounded-2xl h-14 border-rose-500/50 text-rose-500 hover:bg-rose-500/10 px-8 font-black uppercase tracking-widest text-[10px]" leftIcon={ShieldX} onClick={() => { setRejectItem(item); setRejectNote(''); }}>Deny Procedure</Button>
+                                             <Button size="lg" className="rounded-2xl h-14 bg-emerald-500 hover:bg-emerald-600 border-none px-10 shadow-glow font-black uppercase tracking-widest text-[11px] italic" leftIcon={CheckCircle2} onClick={() => approve(item)} isLoading={acting === item.id} disabled={!!acting}>Authorize Node</Button>
+                                             <Button size="lg" variant="outline" className="rounded-2xl h-14 border-rose-500/50 text-rose-500 hover:bg-rose-500/10 px-8 font-black uppercase tracking-widest text-[10px]" leftIcon={ShieldX} onClick={() => { setRejectItem(item); setRejectNote(''); }} disabled={!!acting}>Deny Procedure</Button>
                                           </div>
                                        )}
                                        <div className="flex items-center gap-2 ml-auto group-hover:scale-110 transition-transform">
-                                           <Button variant="outline" size="icon" className="w-14 h-14 rounded-2xl bg-card border-border/40 text-muted-foreground hover:text-primary transition-all shadow-sm" onClick={() => { setEditItem(item); setEditName(item.name); setEditQty(String(item.quantity)); setEditPrice(String(item.unitPrice)); }}><Edit3 size={24} strokeWidth={2.5} /></Button>
-                                           <Button variant="outline" size="icon" className="w-14 h-14 rounded-2xl bg-card border-border/40 text-muted-foreground hover:text-rose-500 transition-all shadow-sm" onClick={() => deleteItem(item)}><Trash2 size={24} strokeWidth={2.5} /></Button>
+                                           <Button variant="outline" size="icon" className="w-14 h-14 rounded-2xl bg-card border-border/40 text-muted-foreground hover:text-primary transition-all shadow-sm" onClick={() => { setEditItem(item); setEditName(item.name); setEditQty(String(item.quantity)); setEditPrice(String(item.unitPrice)); }} disabled={!!acting}><Edit3 size={24} strokeWidth={2.5} /></Button>
+                                           <Button variant="outline" size="icon" className="w-14 h-14 rounded-2xl bg-card border-border/40 text-muted-foreground hover:text-rose-500 transition-all shadow-sm" onClick={() => deleteItem(item)} isLoading={acting === item.id} disabled={!!acting}><Trash2 size={24} strokeWidth={2.5} /></Button>
                                        </div>
                                     </div>
                                     
@@ -378,7 +378,7 @@ export const AdminStockPage: React.FC = () => {
                     
                     <div className="flex flex-col sm:flex-row gap-6 pt-6">
                        <Button variant="outline" className="flex-1 rounded-3xl py-8 h-18 font-black uppercase tracking-widest text-[10px]" onClick={() => setRejectItem(null)}>Abort Denial</Button>
-                       <Button className="flex-1 rounded-3xl py-8 h-18 bg-rose-500 hover:bg-rose-600 border-none shadow-glow font-black uppercase tracking-widest text-[11px] italic" onClick={confirmReject}>
+                       <Button className="flex-1 rounded-3xl py-8 h-18 bg-rose-500 hover:bg-rose-600 border-none shadow-glow font-black uppercase tracking-widest text-[11px] italic" onClick={confirmReject} isLoading={acting === (rejectItem?.id || 'rejecting')} disabled={!!acting}>
                           Commit Denial Protocol
                        </Button>
                     </div>
@@ -412,7 +412,7 @@ export const AdminStockPage: React.FC = () => {
                     
                     <div className="flex flex-col sm:flex-row gap-6 pt-6">
                        <Button variant="outline" className="flex-1 rounded-3xl py-8 h-18 font-black uppercase tracking-widest text-[10px]" onClick={() => setEditItem(null)}>Discard Patch</Button>
-                       <Button className="flex-1 rounded-3xl py-8 h-18 shadow-glow font-black uppercase tracking-widest text-[11px] italic" onClick={confirmEdit}>
+                       <Button className="flex-1 rounded-3xl py-8 h-18 shadow-glow font-black uppercase tracking-widest text-[11px] italic" onClick={confirmEdit} isLoading={acting === (editItem?.id || 'editing')} disabled={!!acting}>
                           Commit System Update
                        </Button>
                     </div>

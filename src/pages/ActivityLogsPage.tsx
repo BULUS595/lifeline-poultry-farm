@@ -18,12 +18,13 @@ import {
     Terminal,
     Fingerprint,
     RefreshCw,
+    ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Skeleton } from '../components/Skeleton';
 import { supabase } from '../services/supabaseService';
 import { type ActivityLog as ActivityLogType } from '../types';
-import { Card, Button, Badge } from '../components/ui';
+import { Card, Button, Badge, Modal, Input } from '../components/ui';
 
 export const ActivityLogsPage: React.FC = () => {
     const { isSuperAdmin, isManager, isAuditor } = useAuth();
@@ -49,7 +50,7 @@ export const ActivityLogsPage: React.FC = () => {
             if (error) throw error;
             setLogs(data as ActivityLogType[] || []);
         } catch (err) {
-            console.error('Activity logs fetch error:', err);
+            console.error('Audit link failed:', err);
         } finally {
             setIsLoading(false);
         }
@@ -58,22 +59,29 @@ export const ActivityLogsPage: React.FC = () => {
     useEffect(() => { loadLogs(); }, [loadLogs]);
 
     const getActionIcon = (log: ActivityLogType) => {
-        if (log.isDeleted) return <Trash2 size={16} />;
+        if (log.isDeleted) return <Trash2 size={20} className="text-rose-500" />;
         switch (log.dataType) {
-            case 'sale': return <ShoppingCart size={16} />;
-            case 'storage': return <Package size={16} />;
-            case 'expense': return <Wallet size={16} />;
-            case 'user': return <UserIcon size={16} />;
-            case 'mortality': return <TrendingDown size={16} />;
-            default: return <Activity size={16} />;
+            case 'sale': return <ShoppingCart size={20} className="text-primary" />;
+            case 'storage': return <Package size={20} className="text-primary" />;
+            case 'expense': return <Wallet size={20} className="text-primary" />;
+            case 'user': return <UserIcon size={20} className="text-primary" />;
+            case 'mortality': return <TrendingDown size={20} className="text-primary" />;
+            default: return <Activity size={20} className="text-primary" />;
         }
     };
 
     if (!isSuperAdmin && !isManager && !isAuditor) return (
-      <div className="h-[60vh] flex flex-col items-center justify-center opacity-50 space-y-4">
-         <div className="p-6 bg-rose-500/10 rounded-full text-rose-500"><ShieldCheck size={48} /></div>
-         <h2 className="text-2xl font-black uppercase tracking-tight italic">Security Restriction</h2>
-         <p className="max-w-xs text-center font-medium">Global audit logs are restricted to authorized security personnel.</p>
+      <div className="h-[70vh] flex flex-col items-center justify-center animate-slide-up px-6">
+         <div className="w-24 h-24 bg-rose-500/10 rounded-[32px] flex items-center justify-center text-rose-500 border border-rose-500/20 shadow-glow mb-8 animate-bounce-slow">
+            <ShieldAlert size={48} strokeWidth={2.5} />
+         </div>
+         <div className="text-center space-y-4">
+            <h2 className="text-3xl font-black uppercase tracking-tighter italic leading-none">Security Restriction <span className="text-rose-500 italic underline">Active</span></h2>
+            <p className="max-w-md font-bold text-muted-foreground uppercase text-[10px] tracking-[0.2em] leading-relaxed opacity-60">Audit logs are restricted to authorized personnel with L2 clearance or above.</p>
+         </div>
+         <Button variant="secondary" className="mt-8 rounded-2xl px-10 py-8 font-black uppercase tracking-widest text-[11px]" onClick={() => window.history.back()}>
+            Return to Operations
+         </Button>
       </div>
     );
 
@@ -84,102 +92,118 @@ export const ActivityLogsPage: React.FC = () => {
     ), [logs, debouncedSearch]);
 
     return (
-        <div className="space-y-10 pb-20">
+        <div className="space-y-12 pb-20 animate-slide-up">
             {/* Header */}
-            <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-end">
+            <div className="flex flex-col md:flex-row gap-8 justify-between items-start md:items-end px-2">
                 <div>
-                   <h1 className="text-4xl font-black tracking-tighter uppercase italic">Audit <span className="text-primary italic underline">Terminal</span></h1>
-                   <p className="text-muted-foreground font-medium mt-1 uppercase text-[10px] tracking-widest opacity-60">Forensic tracking of all operational events</p>
+                   <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none shrink-0">
+                     Audit <span className="text-primary italic underline underline-offset-8 decoration-4">Terminal</span>
+                   </h1>
+                   <p className="text-muted-foreground font-black text-[10px] uppercase tracking-[0.2em] mt-3 opacity-40">Forensic identity tracking protocol</p>
                 </div>
-                <div className="flex items-center gap-3">
-                   <div className="relative w-full md:w-72">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                      <input type="text" placeholder="Search audit trail..." className="w-full pl-11 pr-4 py-2.5 bg-card border border-border rounded-2xl focus:border-primary outline-none transition-all text-sm font-medium" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                   <div className="relative flex-1 md:w-80 group">
+                      <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" size={20} strokeWidth={2.5} />
+                      <Input type="text" placeholder="Scan audit records..." className="pl-14 pr-6 py-4 rounded-2xl border-border/40 shadow-sm h-14" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                    </div>
-                   <Button variant="outline" size="icon" onClick={loadLogs} className="rounded-2xl"><RefreshCw className={isLoading ? 'animate-spin' : ''} size={18} /></Button>
+                   <Button variant="outline" size="icon" onClick={loadLogs} className="rounded-2xl w-14 h-14 bg-card/40 border-border/40 shadow-sm"><RefreshCw className={isLoading ? 'animate-spin' : ''} size={22} strokeWidth={2.5} /></Button>
                 </div>
             </div>
 
             {/* List */}
-            <div className="space-y-4">
+            <div className="space-y-6">
                 {isLoading ? (
-                    [1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} height={80} borderRadius={24} />)
+                    [1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} height={100} borderRadius={32} />)
                 ) : filteredLogs.length === 0 ? (
-                    <div className="py-20 text-center opacity-20">
-                       <Fingerprint size={80} strokeWidth={1} className="mx-auto mb-4" />
-                       <p className="text-xs font-black uppercase tracking-widest italic">No fingerprints detected in the current range</p>
+                    <div className="py-28 text-center bg-muted/10 rounded-[48px] border-4 border-dashed border-border/40 opacity-40">
+                       <Fingerprint size={120} strokeWidth={1} className="mx-auto mb-6 opacity-20" />
+                       <h3 className="text-2xl font-black uppercase italic tracking-tighter px-4">Zero fingerprints detected in vault</h3>
+                       <p className="text-[10px] font-black uppercase tracking-[0.3em] mt-4 max-w-sm mx-auto opacity-60">System stands ready for new identification protocols</p>
                     </div>
                 ) : (
                     filteredLogs.map((log) => (
-                        <Card key={log.id} className="group hover:border-primary/30 hover:bg-primary/5 transition-all p-4 border-l-4 border-l-border/50 hover:border-l-primary" noPadding>
-                            <div className="flex items-center gap-5 p-2">
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border border-border/50 group-hover:scale-110 transition-transform ${log.isDeleted ? 'bg-rose-500/10 text-rose-500' : 'bg-primary/10 text-primary'}`}>
+                        <Card key={log.id} className="group hover:border-primary/40 hover:bg-primary/5 transition-all duration-500 border-l-8 border-l-border/40 hover:border-l-primary p-0 overflow-hidden" noPadding>
+                            <div className="flex items-center gap-6 p-6 md:p-8">
+                                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 border border-border/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-sm ${log.isDeleted ? 'bg-rose-500/10 text-rose-500' : 'bg-primary/10 text-primary'}`}>
                                    {getActionIcon(log)}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                   <div className="flex justify-between items-baseline gap-4 mb-1">
-                                      <p className="font-bold text-sm truncate tracking-tight">{log.userName || 'System Processor'}</p>
-                                      <span className="text-[10px] font-black uppercase text-muted-foreground whitespace-nowrap opacity-60">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(log.timestamp).toLocaleDateString()}</span>
+                                   <div className="flex flex-col md:flex-row justify-between items-start md:items-baseline gap-2 mb-3">
+                                      <p className="font-black text-xl tracking-tighter uppercase italic truncate shrink-0">{log.userName || 'Root Processor'}</p>
+                                      <div className="flex items-center gap-2 bg-muted/20 px-4 py-1.5 rounded-xl border border-border/40">
+                                        <Clock size={12} strokeWidth={3} className="text-muted-foreground opacity-40" />
+                                        <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest tabular-nums opacity-60">#{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(log.timestamp).toLocaleDateString()}</span>
+                                      </div>
                                    </div>
-                                   <p className="text-xs text-muted-foreground font-medium flex items-center gap-2">
-                                      <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${log.isDeleted ? 'bg-rose-500/10 text-rose-500' : 'bg-muted text-foreground opacity-60'}`}>{log.action.replace(/_/g, ' ')}</span>
-                                      <span className="truncate opacity-70 italic">{log.details}</span>
-                                   </p>
+                                   <div className="flex flex-wrap items-center gap-4">
+                                      <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] shadow-sm italic ${log.isDeleted ? 'bg-rose-500 text-white' : 'bg-primary text-white shadow-glow'}`}>
+                                         {log.action.replace(/_/g, ' ')}
+                                      </div>
+                                      <span className="text-xs text-muted-foreground font-black italic opacity-60 truncate max-w-md">Protcol Details: "{log.details}"</span>
+                                   </div>
                                 </div>
-                                <Button variant="ghost" size="icon" className="rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setSelectedLog(log)}><Eye size={16} /></Button>
+                                <Button variant="outline" size="icon" className="w-12 h-12 rounded-xl opacity-0 group-hover:opacity-100 transition-all active:scale-90" onClick={() => setSelectedLog(log)}><Eye size={20} strokeWidth={2.5} /></Button>
                             </div>
                         </Card>
                     ))
                 )}
             </div>
 
-            {/* Modal */}
-            {selectedLog && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-fade-in">
-                    <Card className="w-full max-w-2xl shadow-2xl rounded-[32px] overflow-hidden" noPadding title="Forensic Payload">
-                        <div className="p-8 space-y-8">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                               <div className="p-4 bg-muted/30 rounded-2xl border border-border/50 space-y-1">
-                                  <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Entry ID</p>
-                                  <p className="text-xs font-bold font-mono">#{selectedLog.id.slice(0, 8)}</p>
-                               </div>
-                               <div className="p-4 bg-muted/30 rounded-2xl border border-border/50 space-y-1">
-                                  <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Operator</p>
-                                  <p className="text-xs font-bold leading-none">{selectedLog.userName}</p>
-                               </div>
-                               <div className="p-4 bg-muted/30 rounded-2xl border border-border/50 space-y-1">
-                                  <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Data Class</p>
-                                  <p className="text-xs font-bold uppercase tracking-tighter">{selectedLog.dataType}</p>
-                               </div>
-                               <div className="p-4 bg-muted/30 rounded-2xl border border-border/50 space-y-1">
-                                  <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Clock</p>
-                                  <p className="text-xs font-bold uppercase tracking-tighter italic">LIVE FEED</p>
-                               </div>
-                            </div>
+            {/* Modal Detail View */}
+            <Modal
+                isOpen={!!selectedLog}
+                onClose={() => setSelectedLog(null)}
+                title="Audit Payload Recovery"
+                maxWidth="xl"
+            >
+                {selectedLog && (
+                    <div className="space-y-10 py-2 animate-slide-up">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                           {[
+                             { label: 'Payload ID', value: `#${selectedLog.id.slice(0, 8).toUpperCase()}` },
+                             { label: 'Processor', value: selectedLog.userName, italic: true },
+                             { label: 'Data Node', value: selectedLog.dataType, uppercase: true },
+                             { label: 'Link Status', value: 'ENCRYPTED', uppercase: true, color: 'text-emerald-500' }
+                           ].map((item, i) => (
+                             <div key={i} className="p-6 bg-muted/20 rounded-[28px] border border-border/40 shadow-sm group hover:border-primary/20 transition-all">
+                                <p className="text-[9px] font-black uppercase text-muted-foreground tracking-[0.2em] mb-3 opacity-40">{item.label}</p>
+                                <p className={`text-xs font-black tracking-widest break-all ${item.italic ? 'italic' : ''} ${item.uppercase ? 'uppercase' : ''} ${item.color || 'text-foreground'}`}>{item.value}</p>
+                             </div>
+                           ))}
+                        </div>
 
-                            {selectedLog.previousState ? (
-                                <div className="space-y-3">
-                                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">
-                                      <Terminal size={14} /> State Snapshot
-                                   </div>
-                                   <pre className="p-6 bg-slate-900 text-emerald-400 rounded-3xl text-xs font-mono overflow-auto max-h-[300px] border border-slate-800 shadow-inner">
+                        <div className="space-y-4">
+                           <div className="flex items-center justify-between px-2">
+                                <div className="flex items-center gap-3 text-[11px] font-black uppercase tracking-[0.2em] text-primary">
+                                    <div className="w-2 h-2 bg-primary rounded-full animate-pulse shadow-glow" />
+                                    Forensic State Snapshot
+                                </div>
+                                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest opacity-30">Security Standard 2.4</span>
+                           </div>
+                           {selectedLog.previousState ? (
+                               <div className="relative group">
+                                   <pre className="p-10 bg-slate-950 text-emerald-400 rounded-[40px] text-xs font-mono overflow-auto max-h-[400px] border-4 border-slate-900 shadow-2xl custom-scrollbar leading-relaxed">
                                        {JSON.stringify(selectedLog.previousState, null, 2)}
                                    </pre>
-                                </div>
-                            ) : (
-                                <div className="py-10 bg-muted/20 border border-dashed border-border rounded-3xl text-center">
-                                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest italic">No complex state modification detected</p>
-                                </div>
-                            )}
-
-                            <div className="flex gap-4">
-                               <Button variant="outline" className="flex-1 rounded-2xl py-6" onClick={() => setSelectedLog(null)}>Exit Terminal</Button>
-                               <Button className="flex-1 rounded-2xl py-6 shadow-glow" onClick={() => setSelectedLog(null)}>Verified Audit</Button>
-                            </div>
+                                   <div className="absolute top-6 right-6 p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-500">
+                                        <Terminal size={20} className="animate-pulse" />
+                                   </div>
+                               </div>
+                           ) : (
+                               <div className="py-24 bg-muted/10 border-4 border-dashed border-border/40 rounded-[40px] text-center mt-12">
+                                  <Database size={48} className="mx-auto mb-4 opacity-10" />
+                                  <p className="text-xs font-black text-muted-foreground uppercase tracking-[0.3em] italic opacity-40">No deep state modification detected by terminal</p>
+                               </div>
+                           )}
                         </div>
-                    </Card>
-                </div>
-            )}
+
+                        <div className="flex flex-col sm:flex-row gap-6 pt-6">
+                           <Button variant="outline" className="flex-1 rounded-3xl py-8 h-18 font-black uppercase tracking-widest text-[10px]" onClick={() => setSelectedLog(null)}>Close Recovery</Button>
+                           <Button className="flex-1 rounded-3xl py-8 h-18 shadow-glow font-black uppercase tracking-widest text-[11px] italic" onClick={() => setSelectedLog(null)}>Verified Audit Clear</Button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 };

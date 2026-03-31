@@ -263,3 +263,17 @@ export interface SyncQueue {
   userId: string;
   synced: boolean;
 }
+
+export interface MortalityRecord {
+  id: string;
+  date: string;
+  batch: string;
+  deathCount: number;
+  cause: string;
+  recordedBy: string;
+  recordedByName?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  createdAt: string;
+  farmId: string;
+}

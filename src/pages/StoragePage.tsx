@@ -56,6 +56,7 @@ export const StoragePage: React.FC = () => {
     const [form, setForm] = useState<FormData>(EMPTY_FORM);
     const [formError, setFormError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [actingItem, setActingItem] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     
@@ -151,22 +152,37 @@ export const StoragePage: React.FC = () => {
     const handleDelete = async (item: StockItem) => {
         if (!user) return;
         if (!confirm(`Confirm permanent deletion of "${item.name}"?`)) return;
-        const ok = await supabaseDataService.deleteStockItem(item.id, { id: user.id, name: user.name, role: user.role });
-        if (ok) setItems(prev => prev.filter(i => i.id !== item.id));
+        setActingItem(item.id);
+        try {
+            const ok = await supabaseDataService.deleteStockItem(item.id, { id: user.id, name: user.name, role: user.role });
+            if (ok) setItems(prev => prev.filter(i => i.id !== item.id));
+        } finally {
+            setActingItem(null);
+        }
     };
 
     const handleApprove = async (item: StockItem) => {
         if (!user || !isAdminView) return;
-        const ok = await supabaseDataService.approveStockItem(item.id, { id: user.id, name: user.name, role: user.role });
-        if (ok) setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'APPROVED' } : i));
+        setActingItem(item.id);
+        try {
+            const ok = await supabaseDataService.approveStockItem(item.id, { id: user.id, name: user.name, role: user.role });
+            if (ok) setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'APPROVED' } : i));
+        } finally {
+            setActingItem(null);
+        }
     };
 
     const handleReject = async (item: StockItem) => {
         if (!user || !isAdminView) return;
         const comment = prompt(`Reason for protocol rejection:`, 'Audit required');
         if (comment === null) return;
-        const ok = await supabaseDataService.rejectStockItem(item.id, comment, { id: user.id, name: user.name, role: user.role });
-        if (ok) setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'REJECTED', rejectionComment: comment } : i));
+        setActingItem(item.id);
+        try {
+            const ok = await supabaseDataService.rejectStockItem(item.id, comment, { id: user.id, name: user.name, role: user.role });
+            if (ok) setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'REJECTED', rejectionComment: comment } : i));
+        } finally {
+            setActingItem(null);
+        }
     };
 
     const filtered = useMemo(() => items.filter(i => {
@@ -268,8 +284,8 @@ export const StoragePage: React.FC = () => {
                                 <div className="grid grid-cols-2 gap-4 w-full animate-slide-up">
                                     {isAdminView && item.status === 'PENDING_APPROVAL' && (
                                         <>
-                                            <Button variant="primary" className="rounded-2xl h-16 font-black uppercase tracking-widest text-[10px] shadow-glow" onClick={() => handleApprove(item)}>Verify Node</Button>
-                                            <Button variant="danger" className="rounded-2xl h-16 font-black uppercase tracking-widest text-[10px] shadow-lg" onClick={() => handleReject(item)}>Nullify Node</Button>
+                                            <Button variant="primary" className="rounded-2xl h-16 font-black uppercase tracking-widest text-[10px] shadow-glow" onClick={() => handleApprove(item)} isLoading={actingItem === item.id} disabled={!!actingItem}>Verify Node</Button>
+                                            <Button variant="danger" className="rounded-2xl h-16 font-black uppercase tracking-widest text-[10px] shadow-lg" onClick={() => handleReject(item)} isLoading={actingItem === item.id} disabled={!!actingItem}>Nullify Node</Button>
                                         </>
                                     )}
                                 </div>
@@ -327,8 +343,8 @@ export const StoragePage: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="flex gap-3">
-                                    <Button variant="outline" size="icon" className="w-14 h-14 bg-card/60 text-muted-foreground hover:text-primary hover:border-primary/40 rounded-[20px] shadow-sm active:scale-90 transition-all" onClick={() => { setEditingItem(item); setForm({ name: item.name, quantity: String(item.quantity), unitPrice: String(item.unitPrice), unit: item.unit, minThreshold: String(item.minThreshold), imageUrl: item.imageUrl || '' }); setShowForm(true); }}><Edit3 size={20} strokeWidth={3} /></Button>
-                                    <Button variant="outline" size="icon" className="w-14 h-14 bg-card/60 text-muted-foreground hover:text-rose-500 hover:border-rose-500/40 rounded-[20px] shadow-sm active:scale-90 transition-all" onClick={() => handleDelete(item)}><Trash2 size={20} strokeWidth={3} /></Button>
+                                    <Button variant="outline" size="icon" className="w-14 h-14 bg-card/60 text-muted-foreground hover:text-primary hover:border-primary/40 rounded-[20px] shadow-sm active:scale-90 transition-all" onClick={() => { setEditingItem(item); setForm({ name: item.name, quantity: String(item.quantity), unitPrice: String(item.unitPrice), unit: item.unit, minThreshold: String(item.minThreshold), imageUrl: item.imageUrl || '' }); setShowForm(true); }} disabled={!!actingItem}><Edit3 size={20} strokeWidth={3} /></Button>
+                                    <Button variant="outline" size="icon" className="w-14 h-14 bg-card/60 text-muted-foreground hover:text-rose-500 hover:border-rose-500/40 rounded-[20px] shadow-sm active:scale-90 transition-all" onClick={() => handleDelete(item)} isLoading={actingItem === item.id} disabled={!!actingItem}><Trash2 size={20} strokeWidth={3} /></Button>
                                 </div>
                             </div>
                         </div>

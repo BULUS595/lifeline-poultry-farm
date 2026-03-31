@@ -44,16 +44,16 @@ export const SalesRecordsPage: React.FC = () => {
             } else {
                 salesRes = { success: false, data: [], message: 'No user' };
             }
+            
+            if (!salesRes.success) {
+                setHasError(true);
+            }
 
             const [stockData, { data: usersData }] = await Promise.all([
                 supabaseDataService.getAllStockItems(),
                 supabase.from('users').select('id, name')
             ]);
             
-            if (!salesRes.success && user?.role && user.role.includes('inventory')) {
-                setHasError(true);
-            }
-
             setSales(salesRes.data || []);
             setStockItems(stockData || []);
             if (usersData) {
@@ -132,7 +132,16 @@ export const SalesRecordsPage: React.FC = () => {
     const handleExportCSV = () => {
         if (filteredRecords.length === 0) return;
         const headers = ['Receipt', 'Date', 'Product', 'Qty', 'Price', 'Total', 'Payment', 'Staff'];
-        const rows = filteredRecords.map(r => [r.receiptNumber, r.date.toLocaleString(), r.productName, r.quantity, r.unitPrice, r.totalAmount, r.paymentMethod, r.salespersonName]);
+        const rows = filteredRecords.map(r => [
+            r.receiptNumber, 
+            r.date.toLocaleString(), 
+            `"${r.productName.replace(/"/g, '""')}"`, 
+            r.quantity, 
+            r.unitPrice, 
+            r.totalAmount, 
+            r.paymentMethod, 
+            `"${r.salespersonName.replace(/"/g, '""')}"`
+        ]);
         const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
@@ -147,15 +156,17 @@ export const SalesRecordsPage: React.FC = () => {
         return ids.map(id => ({ id, name: staffDict[id] || 'System' }));
     }, [unrolledRecords, staffDict]);
 
-    const isAdmin = isSuperAdmin || isManager;
-    if (!isAdmin) return (
+    const { isSales } = useAuth();
+    const canAccess = isSuperAdmin || isManager || isSales;
+    
+    if (!canAccess) return (
       <div className="h-[70vh] flex flex-col items-center justify-center animate-slide-up px-6">
          <div className="w-24 h-24 bg-rose-500/10 rounded-[32px] flex items-center justify-center text-rose-500 border border-rose-500/20 shadow-glow mb-8 animate-bounce-slow">
             <XCircle size={48} strokeWidth={2.5} />
          </div>
          <div className="text-center space-y-4">
             <h2 className="text-3xl font-black uppercase tracking-tighter italic leading-none">Fiscal Access <span className="text-rose-500 italic underline">Restricted</span></h2>
-            <p className="max-w-md font-bold text-muted-foreground uppercase text-[10px] tracking-[0.2em] leading-relaxed opacity-60">Archive access is limited to L3 management and auditing personnel only.</p>
+            <p className="max-w-md font-bold text-muted-foreground uppercase text-[10px] tracking-[0.2em] leading-relaxed opacity-60">Archive access is limited to authenticated personnel with proper clearance levels.</p>
          </div>
          <Button variant="secondary" className="mt-8 rounded-2xl px-10 py-8 font-black uppercase tracking-widest text-[11px]" onClick={() => window.history.back()}>
             Return to Operations
