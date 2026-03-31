@@ -894,6 +894,18 @@ export const supabaseDataService = {
       console.error('Core reset failed:', err);
       return { success: false, message: err.message };
     }
+  },
+
+  async clearAllInventory() {
+    try {
+      // Deletes all stock items to start catalog from scratch
+      const { error } = await supabase.from('stock_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      console.error('Inventory clearing failed:', err);
+      return { success: false, message: err.message };
+    }
   }
 };
 
