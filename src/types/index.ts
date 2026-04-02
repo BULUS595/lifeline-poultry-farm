@@ -8,6 +8,7 @@ export type UserRole =
   | 'sales'
   | 'inventory_staff'
   | 'inventory_officer'
+  | 'Inventory Officer'
   | 'accountant'
   | 'auditor'
   | 'worker';

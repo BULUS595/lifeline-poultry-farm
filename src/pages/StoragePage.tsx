@@ -6,12 +6,8 @@ import {
     Trash2,
     Search,
     XCircle,
-    Camera,
-    Paperclip,
-    Send,
     Edit3,
     AlertCircle,
-    History,
     Zap,
     Database,
 } from 'lucide-react';
@@ -55,9 +51,23 @@ export const StoragePage: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     
+    const isInventoryOfficer = user?.role === 'inventory_officer' || user?.role === 'Inventory Officer';
     const isAdminView = isSuperAdmin || isManager;
     const [filterStatus, setFilterStatus] = useState<'all' | string>(isAdminView ? 'PENDING_APPROVAL' : 'all');
     
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    
+    useEffect(() => {
+        if (user) console.log("Inventory Module — Active Identity:", user.role);
+    }, [user]);
+
+    useEffect(() => {
+        if (toast) {
+            const timer = setTimeout(() => setToast(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [toast]);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -72,7 +82,7 @@ export const StoragePage: React.FC = () => {
         setHasError(false);
         try {
             const data = await supabaseDataService.getAllStockItems('farm-1');
-            if (!isAdminView) {
+            if (!isAdminView && user?.role !== 'inventory_officer') {
                 setItems((data || []).filter(i => i.submittedBy === user?.id));
             } else {
                 setItems(data || []);
@@ -131,8 +141,10 @@ export const StoragePage: React.FC = () => {
 
             if (editingItem) {
                 await supabaseDataService.updateStockItem(editingItem.id, payload, { id: user.id, name: user.name, role: user.role });
+                setToast({ message: 'Resource status synchronized successfully.', type: 'success' });
             } else {
                 await supabaseDataService.submitStockItem(payload, user.id, user.name, user.role);
+                setToast({ message: 'New stock entry dispatched for approval.', type: 'success' });
             }
             setShowForm(false);
             loadData();
@@ -199,6 +211,14 @@ export const StoragePage: React.FC = () => {
 
     return (
         <div className="space-y-10 pb-20 animate-slide-up min-h-screen">
+            {/* Toast Notification */}
+            {toast && (
+                <div className={`fixed top-10 right-10 z-[200] p-6 rounded-[32px] border-4 shadow-premium animate-slide-in flex items-center gap-4 ${toast.type === 'success' ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-rose-500 text-white border-rose-400'}`}>
+                    {toast.type === 'success' ? <Zap className="animate-pulse" /> : <AlertTriangle />}
+                    <span className="font-black uppercase tracking-widest text-[10px]">{toast.message}</span>
+                </div>
+            )}
+
             {/* Header Section */}
             <div className="flex flex-col md:flex-row gap-6 md:items-end justify-between px-2">
                 <div>
@@ -207,7 +227,7 @@ export const StoragePage: React.FC = () => {
                    </h1>
                    <p className="text-muted-foreground font-bold text-[10px] uppercase tracking-widest mt-3 opacity-40">Manage Stock and Production Resources</p>
                 </div>
-                {!isAdminView && (
+                {isInventoryOfficer && (
                     <Button size="lg" className="rounded-2xl px-10 h-16 font-black uppercase text-xs tracking-widest shadow-glow" onClick={() => { setEditingItem(null); setForm(EMPTY_FORM); setShowForm(true); }}>
                         <Plus className="mr-2 w-5 h-5" strokeWidth={3} /> Add Stock
                     </Button>
@@ -257,7 +277,7 @@ export const StoragePage: React.FC = () => {
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-60 mt-4">No matching stock found</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                     {filtered.map(item => (
                         <Card key={item.id} className="group relative flex flex-col pt-0 px-0 h-full border-2 border-border/40 bg-card rounded-[40px] transition-all hover:border-primary/40 shadow-sm hover:shadow-premium overflow-hidden" noPadding>
                             <div className="aspect-[16/9] w-full relative bg-slate-900 overflow-hidden border-b-2 border-border/20">

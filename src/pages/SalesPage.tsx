@@ -2,15 +2,16 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     ShoppingCart, Search, Plus, Minus, CheckCircle2,
-    X, RefreshCw, Banknote, Smartphone,
-    CreditCard, Package, ArrowRight, Trash2,
+    X, Banknote, Smartphone,
+    CreditCard, Package, ArrowRight,
     History, User
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, supabaseDataService } from '../services/supabaseService';
 import { type StockItem, type RetailSale } from '../types';
-import { Card, Button, Input, Label, Modal } from '../components/ui';
+import { Button, Input, Modal } from '../components/ui';
 import { Skeleton } from '../components/Skeleton';
+import { ReceiptCard } from '../components/ReceiptCard';
 
 const PAY_METHODS = [
     { id: 'cash',     label: 'Cash',     Icon: Banknote },
@@ -240,7 +241,7 @@ export const SalesPage: React.FC = () => {
                         </div>
                         <Button
                             fullWidth
-                            className="h-16 rounded-[24px] text-sm font-black uppercase tracking-widest shadow-glow group bg-primary hover:bg-primary-hover text-white"
+                            className="h-16 rounded-[24px] text-sm font-black uppercase tracking-widest shadow-glow group bg-primary hover:bg-primary-hover text-white mb-8"
                             disabled={cart.length === 0 || isProcessing}
                             onClick={handleCheckout}
                             isLoading={isProcessing}
@@ -252,30 +253,24 @@ export const SalesPage: React.FC = () => {
             </div>
 
             {/* Receipt Popup */}
-            <Modal isOpen={showReceipt && !!lastSale} onClose={() => setShowReceipt(false)} title="SALE COMPLETED" maxWidth="sm">
-                <div className="space-y-8 py-4 text-center animate-slide-up">
-                    <div className="w-20 h-20 bg-emerald-500/10 rounded-[28px] border-2 border-emerald-500/20 flex items-center justify-center mx-auto text-emerald-500 shadow-glow">
-                        <CheckCircle2 size={40} />
+            <Modal isOpen={showReceipt && !!lastSale} onClose={() => setShowReceipt(false)} title="SALE COMPLETED" maxWidth="md">
+                <div className="space-y-10 py-6 animate-slide-up flex flex-col items-center">
+                    {/* Visual Confirmation Icon (Optional, outside receipt) */}
+                    <div className="w-16 h-16 bg-emerald-500 text-white rounded-2xl flex items-center justify-center shadow-glow mb-4 animate-bounce-subtle no-print">
+                        <CheckCircle2 size={32} strokeWidth={3} />
                     </div>
-                    <div className="space-y-1">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-40">Transaction Receipt</p>
-                        <h4 className="text-2xl font-black tracking-tighter uppercase italic">{lastSale?.receiptNumber}</h4>
+
+                    <div className="w-full">
+                       {lastSale && <ReceiptCard sale={lastSale} />}
                     </div>
-                    <div className="bg-card border-2 border-border/10 p-6 rounded-[32px] text-left space-y-4 shadow-inner">
-                        {lastSale?.items.map((it, idx) => (
-                            <div key={idx} className="flex justify-between text-xs">
-                                <span className="font-bold opacity-70 uppercase">{it.name} ×{it.quantity}</span>
-                                <span className="font-black tabular-nums">₦{it.total.toLocaleString()}</span>
-                            </div>
-                        ))}
-                        <div className="pt-4 border-t border-dashed border-border/20 flex justify-between items-center">
-                            <span className="font-black text-[9px] uppercase tracking-widest opacity-40">Total Paid</span>
-                            <span className="text-2xl font-black text-primary tabular-nums tracking-tighter">₦{lastSale?.totalPrice.toLocaleString()}</span>
-                        </div>
-                    </div>
-                    <div className="flex gap-3">
-                        <Button variant="outline" className="flex-1 rounded-xl h-14 font-bold uppercase text-[9px] tracking-widest" onClick={() => window.print()}>Print</Button>
-                        <Button className="flex-1 rounded-xl h-14 font-bold uppercase text-[9px] tracking-widest bg-primary text-white shadow-glow" onClick={() => setShowReceipt(false)}>Close</Button>
+
+                    <div className="flex gap-4 w-full max-w-[400px] no-print pt-6">
+                        <Button variant="outline" className="flex-1 rounded-2xl h-14 font-black uppercase text-[10px] tracking-widest border-2 hover:bg-muted transition-all" onClick={() => window.print()}>
+                             Print Receipt
+                        </Button>
+                        <Button className="flex-1 rounded-2xl h-14 font-black uppercase text-[10px] tracking-widest bg-slate-900 text-white shadow-lg transition-all" onClick={() => setShowReceipt(false)}>
+                            New Order
+                        </Button>
                     </div>
                 </div>
             </Modal>
