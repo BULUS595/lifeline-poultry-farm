@@ -160,9 +160,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const isAdmin = authState.user?.role === 'super_admin' || authState.user?.role === 'admin';
-  const isInventory = authState.user?.role === 'inventory_staff' || authState.user?.role === 'inventory_officer' || authState.user?.role === 'manager';
-  const isSales = authState.user?.role === 'sales_staff' || authState.user?.role === 'sales';
+  const role = authState.user?.role?.toLowerCase() || '';
+  const isAdmin = role === 'super_admin' || role === 'admin';
+  const isInventory = role === 'inventory_staff' || role === 'inventory_officer' || role === 'manager' || role === 'inventory officer';
+  const isSales = role === 'sales_staff' || role === 'sales';
 
   // maintain legacy names to avoid breaking tons of things, map them back safely if needed.
   const isSuperAdmin = isAdmin;

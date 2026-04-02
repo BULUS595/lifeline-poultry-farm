@@ -38,7 +38,7 @@ const StatusBadge = React.memo(({ status }: { status: string }) => {
 });
 
 export const StoragePage: React.FC = () => {
-    const { user, isSuperAdmin, isManager } = useAuth();
+    const { user, isSuperAdmin, isManager, isInventory } = useAuth();
     const [items, setItems] = useState<StockItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
@@ -51,7 +51,7 @@ export const StoragePage: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     
-    const isInventoryOfficer = user?.role === 'inventory_officer' || user?.role === 'Inventory Officer';
+    const isInventoryOfficer = isInventory;
     const isAdminView = isSuperAdmin || isManager;
     const [filterStatus, setFilterStatus] = useState<'all' | string>(isAdminView ? 'PENDING_APPROVAL' : 'all');
     
