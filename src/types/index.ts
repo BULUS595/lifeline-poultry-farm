@@ -182,6 +182,9 @@ export interface StockItem {
   rejectionComment?: string;
   lastUpdated: string;
   farmId: string;
+  approvedBy?: string;
+  approvedByName?: string;
+  approvedAt?: string;
   deletedBy?: string;
   deletedAt?: string;
 }

@@ -709,7 +709,14 @@ export const supabaseDataService = {
     try {
       const { data, error } = await supabase
         .from('stock_items')
-        .update({ status: 'APPROVED', rejection_comment: null, last_updated: new Date().toISOString() })
+        .update({ 
+          status: 'APPROVED', 
+          rejection_comment: null, 
+          last_updated: new Date().toISOString(),
+          approved_by: admin.id,
+          approved_by_name: admin.name,
+          approved_at: new Date().toISOString(),
+        })
         .eq('id', id)
         .select()
         .single();

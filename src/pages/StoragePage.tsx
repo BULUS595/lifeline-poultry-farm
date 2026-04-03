@@ -350,8 +350,8 @@ export const StoragePage: React.FC = () => {
                                                 Submit
                                             </Button>
                                         )}
-                                        <Button variant="outline" size="icon" className="w-11 h-11 bg-card rounded-xl border-border/40 shadow-sm hover:text-primary transition-all" onClick={() => { setEditingItem(item); setForm({ name: item.name, quantity: String(item.quantity), unitPrice: String(item.unitPrice), unit: item.unit, minThreshold: String(item.minThreshold), imageUrl: item.imageUrl || '' }); setShowForm(true); }} disabled={!!actingItem}><Edit3 size={18} /></Button>
-                                        <Button variant="outline" size="icon" className="w-11 h-11 bg-card rounded-xl border-border/40 shadow-sm hover:text-rose-500 transition-all" onClick={() => handleDelete(item)} isLoading={actingItem === item.id} disabled={!!actingItem}><Trash2 size={18} /></Button>
+                                        <Button variant="outline" size="icon" className="w-11 h-11 bg-card rounded-xl border-border/40 shadow-sm hover:text-primary transition-all" onClick={() => { setEditingItem(item); setForm({ name: item.name, quantity: String(item.quantity), unitPrice: String(item.unitPrice), unit: item.unit, minThreshold: String(item.minThreshold), imageUrl: item.imageUrl || '' }); setShowForm(true); }} disabled={!!actingItem || (!isAdminView && item.status !== 'REJECTED' && item.status !== 'PENDING_APPROVAL' && item.status !== 'APPROVED')}><Edit3 size={18} /></Button>
+                                        <Button variant="outline" size="icon" className="w-11 h-11 bg-card rounded-xl border-border/40 shadow-sm hover:text-rose-500 transition-all" onClick={() => handleDelete(item)} isLoading={actingItem === item.id} disabled={!!actingItem || (!isAdminView && (item.status === 'PENDING_APPROVAL' || item.status === 'APPROVED'))}><Trash2 size={18} /></Button>
                                     </div>
                                 </div>
                             </div>
