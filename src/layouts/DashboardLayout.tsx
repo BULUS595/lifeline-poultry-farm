@@ -13,7 +13,8 @@ import {
   Bell,
   PlusCircle,
   PieChart,
-  CircleUser
+  CircleUser,
+  ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui';
@@ -30,6 +31,7 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['super_admin', 'admin', 'manager'] },
   { label: 'Sales', path: '/sales', icon: ShoppingCart, roles: ['super_admin', 'admin', 'manager', 'sales', 'sales_staff'] },
   { label: 'Inventory', path: '/stock', icon: Database, roles: ['super_admin', 'admin', 'manager', 'inventory_officer', 'inventory_staff'] },
+  { label: 'Approvals', path: '/admin/stock', icon: ShieldCheck, roles: ['super_admin', 'admin', 'manager'] },
   { label: 'Analytics', path: '/farms/1/analytics', icon: PieChart, roles: ['super_admin', 'admin', 'manager'] },
   { label: 'Users', path: '/admin/users', icon: Users, roles: ['super_admin', 'admin'] },
   { label: 'Activity', path: '/admin/activity', icon: ClipboardList, roles: ['super_admin', 'admin', 'manager'] },
@@ -254,15 +256,15 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           </div>
         </header>
 
-        <main className="flex-1 p-6 md:p-10 lg:p-12 pb-32 animate-slide-up bg-background/50">
+        <main className="flex-1 p-6 md:p-10 lg:p-12 pb-44 animate-slide-up bg-background/50">
            <div className="max-w-7xl mx-auto">
             {children}
            </div>
         </main>
 
-        {/* Mobile Bottom Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden glass border-t border-border/40 pb-safe shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
-          <div className="flex items-center justify-around h-22 px-4">
+        {/* Mobile Bottom Navigation - Redesigned for Dark Premium Look */}
+        <nav className="fixed bottom-0 left-0 right-0 z-[100] lg:hidden bg-[#050505] border-t border-white/5 pb-safe shadow-[0_-20px_50px_-15px_rgba(0,0,0,0.8)] backdrop-blur-xl">
+          <div className="flex items-center justify-around h-24 px-4 overflow-hidden">
             {filteredNavItems.slice(0, 4).map((item) => {
               const isActive = location.pathname === item.path;
               return (
@@ -270,14 +272,21 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                   key={item.path}
                   to={item.path}
                   className={`
-                    flex flex-col items-center gap-1.5 transition-all duration-300 w-16
-                    ${isActive ? 'text-primary' : 'text-muted-foreground'}
+                    flex flex-col items-center gap-2 transition-all duration-500 w-20 relative px-1
+                    ${isActive ? 'text-primary' : 'text-white/40 hover:text-white/60'}
                   `}
                 >
-                  <div className={`p-3 rounded-2xl transition-all duration-300 ${isActive ? 'bg-primary/15 scale-110 shadow-sm' : 'active:bg-muted/50'}`}>
-                    <item.icon className="w-6.5 h-6.5" strokeWidth={isActive ? 2.5 : 2} />
+                  {/* Subtle bar indicator for active tab */}
+                  <div className={`absolute -top-[1.5px] w-12 h-[3px] bg-primary rounded-full transition-all duration-500 shadow-[0_0_10px_2px_rgba(var(--primary-rgb),0.5)] ${isActive ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-0'}`} />
+                  
+                  <div className={`
+                    p-3.5 rounded-2xl transition-all duration-500 relative
+                    ${isActive ? 'bg-primary/20 scale-110' : 'active:scale-95'}
+                  `}>
+                    <item.icon className={`w-7 h-7 transition-all ${isActive ? 'drop-shadow-[0_0_8px_rgba(var(--primary-rgb),0.8)]' : ''}`} strokeWidth={isActive ? 3 : 2} />
                   </div>
-                  <span className={`text-[10px] font-black uppercase tracking-tighter ${isActive ? 'opacity-100' : 'opacity-40'}`}>
+                  
+                  <span className={`text-[9px] font-black uppercase tracking-[0.15em] transition-all duration-300 ${isActive ? 'opacity-100 mt-0.5' : 'opacity-30'}`}>
                     {item.label}
                   </span>
                 </NavLink>
@@ -286,14 +295,18 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
              <NavLink
                   to="/profile"
                   className={({ isActive }) => `
-                    flex flex-col items-center gap-1.5 transition-all duration-300 w-16
-                    ${isActive ? 'text-primary' : 'text-muted-foreground'}
+                    flex flex-col items-center gap-2 transition-all duration-500 w-20 relative px-1
+                    ${isActive || location.pathname === '/profile' ? 'text-primary' : 'text-white/40 hover:text-white/60'}
                   `}
                 >
-                   <div className={`p-3 rounded-2xl transition-all duration-300 ${location.pathname === '/profile' ? 'bg-primary/15 scale-110' : 'active:bg-muted/50'}`}>
-                    <CircleUser className="w-6.5 h-6.5" strokeWidth={location.pathname === '/profile' ? 2.5 : 2} />
+                   {location.pathname === '/profile' && <div className="absolute -top-[1.5px] w-12 h-[3px] bg-primary rounded-full shadow-[0_0_10px_2px_rgba(var(--primary-rgb),0.5)]" />}
+                   <div className={`
+                    p-3.5 rounded-2xl transition-all duration-500
+                    ${location.pathname === '/profile' ? 'bg-primary/20 scale-110' : 'active:scale-95'}
+                  `}>
+                    <CircleUser className={`w-7 h-7 ${location.pathname === '/profile' ? 'drop-shadow-[0_0_8px_rgba(var(--primary-rgb),0.8)]' : ''}`} strokeWidth={location.pathname === '/profile' ? 3 : 2} />
                   </div>
-                  <span className={`text-[10px] font-black uppercase tracking-tighter ${location.pathname === '/profile' ? 'opacity-100' : 'opacity-40'}`}>Profile</span>
+                  <span className={`text-[9px] font-black uppercase tracking-[0.15em] ${location.pathname === '/profile' ? 'opacity-100 mt-0.5' : 'opacity-30'}`}>Profile</span>
               </NavLink>
           </div>
         </nav>

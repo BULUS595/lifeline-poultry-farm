@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
+    Zap,
+    Camera,
+    CheckCircle2,
+    Database,
     Plus,
     AlertTriangle,
     Package,
     Trash2,
-    Search,
-    XCircle,
     Edit3,
+    Search,
     AlertCircle,
-    Zap,
-    Database,
+    XCircle
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +41,10 @@ const StatusBadge = React.memo(({ status }: { status: string }) => {
 
 export const StoragePage: React.FC = () => {
     const { user, isSuperAdmin, isManager, isInventory } = useAuth();
+    const isInventoryOfficer = isInventory;
+    const isAdminView = isSuperAdmin || isManager;
+    const [filterStatus, setFilterStatus] = useState<'all' | string>(isAdminView ? 'PENDING_APPROVAL' : 'all');
+    
     const [items, setItems] = useState<StockItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
@@ -50,10 +56,6 @@ export const StoragePage: React.FC = () => {
     const [actingItem, setActingItem] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
-    
-    const isInventoryOfficer = isInventory;
-    const isAdminView = isSuperAdmin || isManager;
-    const [filterStatus, setFilterStatus] = useState<'all' | string>(isAdminView ? 'PENDING_APPROVAL' : 'all');
     
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     
@@ -67,10 +69,6 @@ export const StoragePage: React.FC = () => {
             return () => clearTimeout(timer);
         }
     }, [toast]);
-
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const cameraInputRef = useRef<HTMLInputElement>(null);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -104,12 +102,19 @@ export const StoragePage: React.FC = () => {
         return () => { supabase.removeChannel(channel); };
     }, [loadData]);
 
-    const handleImageFile = (file: File) => {
-        if (!file.type.startsWith('image/')) { setFormError('Format not supported — please select an image.'); return; }
-        setSelectedFile(file);
-        const reader = new FileReader();
-        reader.onload = (e) => setForm(f => ({ ...f, imageUrl: e.target?.result as string }));
-        reader.readAsDataURL(file);
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setActingItem('uploading');
+        try {
+            const url = await supabaseDataService.uploadStockImage(file);
+            if (url) setForm(f => ({ ...f, imageUrl: url }));
+            setToast({ message: 'Resource asset uploaded successfully.', type: 'success' });
+        } catch (err) {
+            setToast({ message: 'Uplink failure: Image transmission aborted.', type: 'error' });
+        } finally {
+            setActingItem(null);
+        }
     };
 
     const handleSubmit = async () => {
@@ -119,23 +124,17 @@ export const StoragePage: React.FC = () => {
         const price = parseFloat(form.unitPrice);
         if (isNaN(qty) || qty <= 0) { setFormError('Quantity must be a positive integer.'); return; }
         if (isNaN(price) || price <= 0) { setFormError('Unit price must be a valid currency amount.'); return; }
-        if (!form.imageUrl && !selectedFile && !editingItem) { setFormError('Secure visual ID (image) is required.'); return; }
+        if (!form.imageUrl) { setFormError('Secure visual ID (image) is required.'); return; }
 
         setIsSubmitting(true);
         try {
-            let uploadedUrl = editingItem?.imageUrl || '';
-            if (selectedFile) {
-                const newUrl = await supabaseDataService.uploadStockImage(selectedFile);
-                if (newUrl) uploadedUrl = newUrl;
-            }
-
             const payload = {
                 name: form.name.trim(),
                 quantity: qty,
                 unitPrice: price,
                 unit: form.unit || 'units',
                 minThreshold: parseFloat(form.minThreshold) || 10,
-                imageUrl: uploadedUrl,
+                imageUrl: form.imageUrl,
                 farmId: 'farm-1',
             };
 
@@ -144,7 +143,7 @@ export const StoragePage: React.FC = () => {
                 setToast({ message: 'Resource status synchronized successfully.', type: 'success' });
             } else {
                 await supabaseDataService.submitStockItem(payload, user.id, user.name, user.role);
-                setToast({ message: 'New stock entry dispatched for approval.', type: 'success' });
+                setToast({ message: 'Stock entry finalized and notified to Admin.', type: 'success' });
             }
             setShowForm(false);
             loadData();
@@ -227,11 +226,24 @@ export const StoragePage: React.FC = () => {
                    </h1>
                    <p className="text-muted-foreground font-bold text-[10px] uppercase tracking-widest mt-3 opacity-40">Manage Stock and Production Resources</p>
                 </div>
-                {isInventoryOfficer && (
-                    <Button size="lg" className="rounded-2xl px-10 h-16 font-black uppercase text-xs tracking-widest shadow-glow" onClick={() => { setEditingItem(null); setForm(EMPTY_FORM); setShowForm(true); }}>
-                        <Plus className="mr-2 w-5 h-5" strokeWidth={3} /> Add Stock
+                <div className="flex gap-4 w-full md:w-auto">
+                    <Button 
+                        variant="primary" 
+                        size="lg" 
+                        className="rounded-2xl px-10 h-16 font-black uppercase text-xs tracking-widest shadow-glow flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 border-none group"
+                        onClick={() => { setEditingItem(null); setForm(EMPTY_FORM); setShowForm(true); }}
+                    >
+                        <Plus className="mr-3 w-6 h-6 group-hover:rotate-90 transition-transform" strokeWidth={3} /> Save New Stock
                     </Button>
-                )}
+                    <Button 
+                        variant="outline" 
+                        size="lg" 
+                        className="rounded-2xl px-10 h-16 font-black uppercase text-xs tracking-widest border-2 border-primary/20 hover:bg-primary/5 text-primary group transition-all"
+                        onClick={() => setToast({ message: 'Records synchronized: Admin has been notified of all pending stock.', type: 'success' })}
+                    >
+                        <Zap className="mr-3 w-5 h-5 group-hover:animate-pulse" /> Push to Admin
+                    </Button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -327,7 +339,17 @@ export const StoragePage: React.FC = () => {
 
                                 <div className="flex items-center justify-between pt-8 mt-10 border-t border-border/10">
                                     <span className="text-[10px] font-bold text-muted-foreground opacity-30 uppercase tracking-[0.2em]">{new Date(item.lastUpdated).toLocaleDateString()}</span>
-                                    <div className="flex gap-3">
+                                    <div className="flex items-center gap-3">
+                                        {isInventoryOfficer && item.status === 'PENDING_APPROVAL' && (
+                                            <Button 
+                                                variant="primary" 
+                                                size="sm" 
+                                                className="h-11 rounded-xl px-6 font-black uppercase text-[10px] tracking-widest shadow-glow"
+                                                onClick={() => setToast({ message: `"${item.name}" submitted to Admin directory.`, type: 'success' })}
+                                            >
+                                                Submit
+                                            </Button>
+                                        )}
                                         <Button variant="outline" size="icon" className="w-11 h-11 bg-card rounded-xl border-border/40 shadow-sm hover:text-primary transition-all" onClick={() => { setEditingItem(item); setForm({ name: item.name, quantity: String(item.quantity), unitPrice: String(item.unitPrice), unit: item.unit, minThreshold: String(item.minThreshold), imageUrl: item.imageUrl || '' }); setShowForm(true); }} disabled={!!actingItem}><Edit3 size={18} /></Button>
                                         <Button variant="outline" size="icon" className="w-11 h-11 bg-card rounded-xl border-border/40 shadow-sm hover:text-rose-500 transition-all" onClick={() => handleDelete(item)} isLoading={actingItem === item.id} disabled={!!actingItem}><Trash2 size={18} /></Button>
                                     </div>
@@ -382,30 +404,48 @@ export const StoragePage: React.FC = () => {
                     </div>
 
                     <div className="space-y-6 bg-muted/5 p-10 rounded-[40px] border-2 border-dashed border-border/20">
-                       <Label className="text-[10px] font-black uppercase text-muted-foreground opacity-40 ml-1 tracking-widest">Visual Documentation</Label>
-                       <div className="flex flex-col sm:flex-row gap-4">
-                          <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={e => e.target.files?.[0] && handleImageFile(e.target.files[0])} />
-                          <Button variant="outline" className="flex-1 rounded-2xl h-16 font-black text-[10px] uppercase tracking-widest" onClick={() => fileInputRef.current?.click()}>Upload File</Button>
-                          <input ref={cameraInputRef} type="file" className="hidden" accept="image/*" capture="environment" onChange={e => e.target.files?.[0] && handleImageFile(e.target.files[0])} />
-                          <Button variant="outline" className="flex-1 rounded-2xl h-16 font-black text-[10px] uppercase tracking-widest" onClick={() => cameraInputRef.current?.click()}>Take Photo</Button>
-                       </div>
+                       <Label className="text-[10px] font-black uppercase text-muted-foreground opacity-40 ml-1 tracking-widest">Visual Documentation (Required)</Label>
                        
-                       {form.imageUrl && (
-                           <div className="relative group w-56 h-56 rounded-[32px] overflow-hidden border-2 border-primary/20 mx-auto shadow-premium mt-8">
-                               <img src={form.imageUrl} className="w-full h-full object-cover" />
-                               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                                    <button className="bg-rose-500 text-white w-14 h-14 rounded-2xl shadow-glow flex items-center justify-center transition-transform active:scale-90" onClick={() => { setForm(f => ({ ...f, imageUrl: '' })); setSelectedFile(null); }}>
-                                        <Trash2 size={24} />
-                                    </button>
+                       <div className="flex flex-col items-center gap-6">
+                           <label className="w-full flex flex-col items-center justify-center border-4 border-dashed border-border/40 rounded-[32px] p-12 bg-card/40 hover:bg-primary/5 hover:border-primary/40 transition-all cursor-pointer group/upload">
+                               {actingItem === 'uploading' ? (
+                                   <div className="flex flex-col items-center">
+                                       <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+                                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Syncing Asset...</span>
+                                   </div>
+                               ) : form.imageUrl ? (
+                                   <div className="flex flex-col items-center">
+                                       <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
+                                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">Asset Linked Successfully</span>
+                                   </div>
+                               ) : (
+                                   <div className="flex flex-col items-center">
+                                       <Camera className="w-12 h-12 text-muted-foreground group-hover/upload:text-primary transition-colors mb-4" />
+                                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground group-hover/upload:text-primary transition-colors text-center">
+                                           Attach Photo or Digital Receipt
+                                       </span>
+                                   </div>
+                               )}
+                               <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={actingItem === 'uploading'} />
+                           </label>
+
+                           {form.imageUrl && (
+                               <div className="relative group w-64 h-64 rounded-[32px] overflow-hidden border-4 border-primary/20 shadow-premium">
+                                   <img src={form.imageUrl} className="w-full h-full object-cover" />
+                                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                                        <button className="bg-rose-500 text-white w-16 h-16 rounded-2xl shadow-glow flex items-center justify-center transition-transform active:scale-95" onClick={() => setForm(f => ({ ...f, imageUrl: '' }))}>
+                                            <Trash2 size={28} strokeWidth={3} />
+                                        </button>
+                                   </div>
                                </div>
-                           </div>
-                       )}
+                           )}
+                       </div>
                     </div>
 
                     <div className="flex gap-6 pt-6">
                         <Button variant="outline" className="flex-1 rounded-[28px] h-20 font-black uppercase text-[11px] tracking-[0.2em]" onClick={() => setShowForm(false)}>Discard</Button>
-                        <Button className="flex-1 rounded-[28px] h-20 shadow-glow font-black uppercase text-sm tracking-tight text-white bg-primary" onClick={handleSubmit} isLoading={isSubmitting}>
-                            {editingItem ? 'Finalize Changes' : 'Submit Entry'}
+                        <Button className="flex-1 rounded-[28px] h-20 shadow-glow font-black uppercase text-sm tracking-tight text-white bg-primary group" onClick={handleSubmit} isLoading={isSubmitting}>
+                            <Zap className="mr-3 w-5 h-5 group-hover:animate-pulse" /> {editingItem ? 'Save & Push' : 'Save & Push to Admin'}
                         </Button>
                     </div>
                 </div>
