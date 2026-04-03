@@ -40,8 +40,7 @@ const StatusBadge = React.memo(({ status }: { status: string }) => {
 });
 
 export const StoragePage: React.FC = () => {
-    const { user, isSuperAdmin, isManager, isInventory } = useAuth();
-    const isInventoryOfficer = isInventory;
+    const { user, isSuperAdmin, isManager } = useAuth();
     const isAdminView = isSuperAdmin || isManager;
     const [filterStatus, setFilterStatus] = useState<'all' | string>(isAdminView ? 'PENDING_APPROVAL' : 'all');
     
@@ -340,16 +339,7 @@ export const StoragePage: React.FC = () => {
                                 <div className="flex items-center justify-between pt-8 mt-10 border-t border-border/10">
                                     <span className="text-[10px] font-bold text-muted-foreground opacity-30 uppercase tracking-[0.2em]">{new Date(item.lastUpdated).toLocaleDateString()}</span>
                                     <div className="flex items-center gap-3">
-                                        {isInventoryOfficer && item.status === 'PENDING_APPROVAL' && (
-                                            <Button 
-                                                variant="primary" 
-                                                size="sm" 
-                                                className="h-11 rounded-xl px-6 font-black uppercase text-[10px] tracking-widest shadow-glow"
-                                                onClick={() => setToast({ message: `"${item.name}" submitted to Admin directory.`, type: 'success' })}
-                                            >
-                                                Submit
-                                            </Button>
-                                        )}
+
                                         <Button variant="outline" size="icon" className="w-11 h-11 bg-card rounded-xl border-border/40 shadow-sm hover:text-primary transition-all" onClick={() => { setEditingItem(item); setForm({ name: item.name, quantity: String(item.quantity), unitPrice: String(item.unitPrice), unit: item.unit, minThreshold: String(item.minThreshold), imageUrl: item.imageUrl || '' }); setShowForm(true); }} disabled={!!actingItem || (!isAdminView && item.status !== 'REJECTED' && item.status !== 'PENDING_APPROVAL' && item.status !== 'APPROVED')}><Edit3 size={18} /></Button>
                                         <Button variant="outline" size="icon" className="w-11 h-11 bg-card rounded-xl border-border/40 shadow-sm hover:text-rose-500 transition-all" onClick={() => handleDelete(item)} isLoading={actingItem === item.id} disabled={!!actingItem || (!isAdminView && (item.status === 'PENDING_APPROVAL' || item.status === 'APPROVED'))}><Trash2 size={18} /></Button>
                                     </div>
