@@ -442,6 +442,8 @@ export const supabaseDataService = {
       quantity: item.quantity || 0,
       unitPrice: item.unit_price || 0,
       unit: item.unit || 'units',
+      category: item.category || 'other',
+      description: item.description || '',
       minThreshold: item.min_threshold || 0,
       imageUrl: item.image_url,
       status: item.status || 'PENDING_APPROVAL',
@@ -548,7 +550,7 @@ export const supabaseDataService = {
 
   /** Inventory Staff submits for admin approval */
   async submitStockItem(
-    item: Pick<StockItem, 'name' | 'quantity' | 'unitPrice' | 'unit' | 'minThreshold' | 'imageUrl' | 'farmId'>,
+    item: Pick<StockItem, 'name' | 'quantity' | 'unitPrice' | 'unit' | 'minThreshold' | 'category' | 'description' | 'imageUrl' | 'farmId'>,
     submittedBy: string,
     submittedByName: string,
     userRole: string
@@ -562,6 +564,8 @@ export const supabaseDataService = {
           quantity: item.quantity,
           unit_price: item.unitPrice,
           unit: item.unit,
+          category: item.category || 'other',
+          description: item.description || '',
           min_threshold: item.minThreshold,
           image_url: item.imageUrl || null,
           farm_id: isValidUUID ? item.farmId : null,
@@ -622,6 +626,8 @@ export const supabaseDataService = {
       if (updates.unitPrice !== undefined) dbUpdates.unit_price = updates.unitPrice;
       if (updates.minThreshold !== undefined) dbUpdates.min_threshold = updates.minThreshold;
       if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
+      if (updates.category !== undefined) dbUpdates.category = updates.category;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
 
       const { data, error } = await supabase
         .from('stock_items')

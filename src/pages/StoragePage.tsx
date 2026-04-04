@@ -28,6 +28,8 @@ type FormData = {
     quantity: string;
     unitPrice: string;
     unit: string;
+    category: string;
+    description: string;
     minThreshold: string;
     imageUrl: string;
 };
@@ -37,6 +39,8 @@ const EMPTY_FORM: FormData = {
     quantity: '',
     unitPrice: '',
     unit: 'units',
+    category: 'feed',
+    description: '',
     minThreshold: '10',
     imageUrl: '',
 };
@@ -79,11 +83,12 @@ const Toast = ({ message, type }: { message: string; type: 'success' | 'error' }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const StoragePage: React.FC = () => {
-    const { user, isSuperAdmin, isManager } = useAuth();
-    const isAdminView = isSuperAdmin || isManager;
+    const { user, isInventory, isAdmin } = useAuth();
+    // Re-check Admin View logic: it should be true if user is Admin OR Inventory since they manage the stock
+    const isAdminView = isAdmin || isInventory;
 
     const [filterStatus, setFilterStatus] = useState<string>(
-        isAdminView ? 'PENDING_APPROVAL' : 'all'
+        isAdmin ? 'PENDING_APPROVAL' : 'all'
     );
     const [items, setItems] = useState<StockItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -169,6 +174,8 @@ export const StoragePage: React.FC = () => {
             quantity: String(item.quantity),
             unitPrice: String(item.unitPrice),
             unit: item.unit,
+            category: item.category || 'feed',
+            description: item.description || '',
             minThreshold: String(item.minThreshold),
             imageUrl: item.imageUrl || '',
         });
@@ -195,6 +202,8 @@ export const StoragePage: React.FC = () => {
                 quantity: qty,
                 unitPrice: price,
                 unit: form.unit || 'units',
+                category: form.category || 'feed',
+                description: form.description.trim(),
                 minThreshold: parseFloat(form.minThreshold) || 10,
                 imageUrl: form.imageUrl,
                 farmId: 'farm-1',
@@ -294,15 +303,15 @@ export const StoragePage: React.FC = () => {
                     <p className="text-sm text-muted-foreground mt-0.5">Manage and submit stock items for approval</p>
                 </div>
 
-                {/* Only inventory staff sees this button; admins manage from their panel */}
-                {!isAdminView && (
+                {/* Only inventory staff and admins can see this button */}
+                {isAdminView && (
                     <Button
                         variant="primary"
-                        className="flex items-center gap-2 px-5 py-2.5 h-10 rounded-xl text-sm font-semibold shadow-sm hover:shadow-md transition-all"
+                        className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-black italic shadow-lg shadow-primary/20 transition-all hover:brightness-110 active:scale-95"
                         onClick={openNewForm}
+                        leftIcon={Plus}
                     >
-                        <Plus size={16} strokeWidth={2.5} />
-                        Add New Stock
+                        Add Stock
                     </Button>
                 )}
             </div>
@@ -486,10 +495,40 @@ export const StoragePage: React.FC = () => {
                             id="item-name"
                             type="text"
                             placeholder="e.g. Broiler Starter Feed 50kg"
-                            className="h-11 rounded-xl border-border/60 bg-background"
+                            className="h-11 rounded-xl border-border/40 bg-background/50 hover:border-primary/40 focus:border-primary transition-all font-black"
                             value={form.name}
                             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                         />
+                    </div>
+
+                    {/* Category & Description */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="item-category">Category <span className="text-rose-500">*</span></Label>
+                            <Select
+                                id="item-category"
+                                className="h-11 rounded-xl border-border/40 bg-background/50"
+                                value={form.category}
+                                onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                            >
+                                <option value="feed">Feed</option>
+                                <option value="medicine">Medicine</option>
+                                <option value="birds">Birds</option>
+                                <option value="equipment">Equipment</option>
+                                <option value="eggs">Eggs</option>
+                                <option value="other">Other</option>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5 flex flex-col">
+                            <Label htmlFor="item-desc">Description</Label>
+                            <input
+                                id="item-desc"
+                                className="input-modern h-11 rounded-xl border-border/40 bg-background/50 hover:border-primary/40 focus:border-primary transition-all font-black placeholder:opacity-30 italic px-4"
+                                placeholder="Short description..."
+                                value={form.description}
+                                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                            />
+                        </div>
                     </div>
 
                     {/* Quantity + Unit */}

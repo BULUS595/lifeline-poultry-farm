@@ -174,6 +174,8 @@ export interface StockItem {
   quantity: number;
   unitPrice: number;
   unit: string;
+  category?: string;
+  description?: string;
   minThreshold: number;
   imageUrl?: string;
   status: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'DELETED' | 'OUT_OF_STOCK';
@@ -188,6 +190,7 @@ export interface StockItem {
   deletedBy?: string;
   deletedAt?: string;
 }
+
 
 export interface StockActivityLog {
   id: string;
