@@ -595,8 +595,8 @@ export const supabaseDataService = {
 
       // Admin Notifications
       await supabase.from('stock_notifications').insert([
-        { stock_item_id: data.id, recipient_role: 'super_admin', message: 'New stock submitted for approval' },
-        { stock_item_id: data.id, recipient_role: 'manager', message: 'New stock submitted for approval' }
+        { stock_item_id: data.id, recipient_role: 'super_admin', message: 'New stock sent for approval' },
+        { stock_item_id: data.id, recipient_role: 'manager', message: 'New stock sent for approval' }
       ]);
 
       return this._mapStockItem(data);

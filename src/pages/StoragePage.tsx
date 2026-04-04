@@ -218,7 +218,7 @@ export const StoragePage: React.FC = () => {
                 setToast({ message: 'Stock item updated successfully.', type: 'success' });
             } else {
                 await supabaseDataService.submitStockItem(payload, user.id, user.name, user.role);
-                setToast({ message: 'Stock submitted to admin for approval.', type: 'success' });
+                setToast({ message: 'Stock sent to admin for approval.', type: 'success' });
             }
             setShowForm(false);
             loadData();
@@ -657,7 +657,7 @@ export const StoragePage: React.FC = () => {
                             ) : (
                                 <>
                                     <Send size={15} />
-                                    {editingItem ? 'Save Changes' : 'Submit to Admin'}
+                                    {editingItem ? 'Save Changes' : 'Send to Admin'}
                                 </>
                             )}
                         </button>
