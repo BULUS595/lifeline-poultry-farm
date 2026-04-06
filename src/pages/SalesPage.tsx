@@ -122,9 +122,7 @@ export const SalesPage: React.FC = () => {
 
     return (
         <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 animate-slide-up pb-20">
-            {/* Catalog Section */}
             <div className="flex-1 flex flex-col space-y-8 overflow-hidden bg-background/50 rounded-[40px] p-2 lg:p-6 lg:border border-border/20">
-                {/* Header with Search */}
                 <div className="flex items-center gap-6 px-4 pt-4 lg:pt-0">
                     <button onClick={() => window.history.back()} className="p-4 bg-muted/20 hover:bg-muted/40 rounded-[24px] transition-all hover:scale-105 active:scale-95 border border-border/10">
                         <X size={24} />
@@ -149,7 +147,6 @@ export const SalesPage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Stock Grid */}
                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar px-4 lg:px-2">
                     {isLoading ? (
                         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
@@ -211,12 +208,10 @@ export const SalesPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Sidebar POS - Cart Section */}
             <div className={`
                 fixed inset-0 lg:static z-[60] lg:w-[420px] flex flex-col bg-card lg:border border-border/30 rounded-[40px] shadow-2xl lg:shadow-premium transition-all duration-500 transform
                 ${isCartOpen ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}
             `}>
-                {/* Cart Header */}
                 <div className="p-8 border-b border-border/10 flex justify-between items-center bg-muted/5 rounded-t-[40px]">
                     <div className="flex items-center gap-4">
                         <div className="p-3 bg-primary/10 text-primary rounded-2xl">
@@ -227,15 +222,11 @@ export const SalesPage: React.FC = () => {
                             <p className="text-[9px] font-bold uppercase text-muted-foreground opacity-40 tracking-widest">Current selection: {cart.length} items</p>
                         </div>
                     </div>
-                    <button 
-                        className="lg:hidden p-3 bg-muted/20 hover:bg-muted/40 rounded-2xl transition-all" 
-                        onClick={() => setIsCartOpen(false)}
-                    >
+                    <button className="lg:hidden p-3 bg-muted/20 hover:bg-muted/40 rounded-2xl transition-all" onClick={() => setIsCartOpen(false)}>
                         <X size={24} />
                     </button>
                 </div>
 
-                {/* Cart Items List */}
                 <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 custom-scrollbar">
                     {cart.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center py-20 opacity-20 grayscale">
@@ -260,17 +251,11 @@ export const SalesPage: React.FC = () => {
                                 </div>
                             </div>
                             <div className="flex items-center gap-3 bg-background p-1.5 rounded-2xl border border-border/20 shadow-inner shrink-0">
-                                <button 
-                                    onClick={() => updateQty(item.id, -1)} 
-                                    className="w-10 h-10 flex items-center justify-center hover:bg-rose-500 hover:text-white rounded-xl transition-all active:scale-90"
-                                >
+                                <button onClick={() => updateQty(item.id, -1)} className="w-10 h-10 flex items-center justify-center hover:bg-rose-500 hover:text-white rounded-xl transition-all active:scale-90">
                                     <Minus size={14} strokeWidth={3} />
                                 </button>
                                 <span className="w-6 text-center text-sm font-black tabular-nums">{quantity}</span>
-                                <button 
-                                    onClick={() => updateQty(item.id, 1)} 
-                                    className="w-10 h-10 flex items-center justify-center hover:bg-emerald-500 hover:text-white rounded-xl transition-all active:scale-90"
-                                >
+                                <button onClick={() => updateQty(item.id, 1)} className="w-10 h-10 flex items-center justify-center hover:bg-emerald-500 hover:text-white rounded-xl transition-all active:scale-90">
                                     <Plus size={14} strokeWidth={3} />
                                 </button>
                             </div>
@@ -278,38 +263,20 @@ export const SalesPage: React.FC = () => {
                     ))}
                 </div>
 
-                {/* Summary & Checkout Section */}
                 <div className="p-10 border-t border-border/10 space-y-8 bg-muted/5 rounded-b-[40px]">
                     <div className="space-y-6">
-                        {/* Customer & Payment Method */}
-                        <div className="space-y-6">
-                            <div className="flex items-center gap-4 bg-background/50 p-4 rounded-2xl border border-border/10">
-                                <div className="p-2.5 bg-muted rounded-xl text-muted-foreground"><User size={18} /></div>
-                                <Input 
-                                    placeholder="Enter Customer Name" 
-                                    className="h-10 border-0 bg-transparent font-black p-0 text-sm focus:ring-0 placeholder:opacity-30 placeholder:italic" 
-                                    value={customerName} 
-                                    onChange={e => setCustomerName(e.target.value)} 
-                                />
-                            </div>
+                        <div className="flex items-center gap-4 bg-background/50 p-4 rounded-2xl border border-border/10">
+                            <div className="p-2.5 bg-muted rounded-xl text-muted-foreground"><User size={18} /></div>
+                            <Input placeholder="Enter Customer Name" className="h-10 border-0 bg-transparent font-black p-0 text-sm focus:ring-0 placeholder:opacity-30 placeholder:italic" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                        </div>
 
-                            <div className="flex gap-4">
-                                {PAY_METHODS.map(({ id, label, Icon }) => (
-                                    <button 
-                                        key={id} 
-                                        onClick={() => setPaymentMethod(id)} 
-                                        className={`
-                                            flex-1 flex flex-col items-center gap-2 py-4 rounded-[24px] border-2 transition-all
-                                            ${paymentMethod === id 
-                                                ? 'border-primary bg-primary text-white shadow-glow' 
-                                                : 'border-border/10 bg-card hover:bg-muted/10 opacity-70'}
-                                        `}
-                                    >
-                                        <Icon size={18} strokeWidth={paymentMethod === id ? 3 : 2} />
-                                        <span className="text-[9px] font-black uppercase tracking-[0.15em]">{label}</span>
-                                    </button>
-                                ))}
-                            </div>
+                        <div className="flex gap-4">
+                            {PAY_METHODS.map(({ id, label, Icon }) => (
+                                <button key={id} onClick={() => setPaymentMethod(id)} className={`flex-1 flex flex-col items-center gap-2 py-4 rounded-[24px] border-2 transition-all ${paymentMethod === id ? 'border-primary bg-primary text-white shadow-glow' : 'border-border/10 bg-card hover:bg-muted/10 opacity-70'}`}>
+                                    <Icon size={18} strokeWidth={paymentMethod === id ? 3 : 2} />
+                                    <span className="text-[9px] font-black uppercase tracking-[0.15em]">{label}</span>
+                                </button>
+                            ))}
                         </div>
                     </div>
 
@@ -337,7 +304,6 @@ export const SalesPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Receipt Modal */}
             <Modal isOpen={showReceipt && !!lastSale} onClose={() => setShowReceipt(false)} title="SUCCESSFUL TRANSACTION" maxWidth="md">
                 <div className="space-y-10 py-10 animate-slide-up flex flex-col items-center bg-background rounded-[40px]">
                     <div className="w-24 h-24 bg-emerald-500 text-white rounded-[32px] flex items-center justify-center shadow-glow mb-2 animate-bounce-subtle no-print">
@@ -354,17 +320,10 @@ export const SalesPage: React.FC = () => {
                     </div>
 
                     <div className="flex gap-4 w-full max-w-[440px] px-8 no-print pt-4">
-                        <Button 
-                            variant="outline" 
-                            className="flex-1 rounded-[24px] h-16 font-black uppercase text-[10px] tracking-widest border-2 hover:bg-muted transition-all active:scale-95" 
-                            onClick={() => window.print()}
-                        >
+                        <Button variant="outline" className="flex-1 rounded-[24px] h-16 font-black uppercase text-[10px] tracking-widest border-2 hover:bg-muted transition-all active:scale-95" onClick={() => window.print()}>
                              Print Slip
                         </Button>
-                        <Button 
-                            className="flex-1 rounded-[24px] h-16 font-black uppercase text-[10px] tracking-widest bg-slate-900 text-white shadow-xl transition-all active:scale-95 transform hover:scale-105" 
-                            onClick={() => setShowReceipt(false)}
-                        >
+                        <Button className="flex-1 rounded-[24px] h-16 font-black uppercase text-[10px] tracking-widest bg-slate-900 text-white shadow-xl transition-all active:scale-95 transform hover:scale-105" onClick={() => setShowReceipt(false)}>
                             New Sale
                         </Button>
                     </div>

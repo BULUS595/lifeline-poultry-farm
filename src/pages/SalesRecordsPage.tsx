@@ -104,7 +104,7 @@ export const SalesRecordsPage: React.FC = () => {
     }, [sales, stockItems, staffDict]);
 
     const filteredRecords = useMemo(() => {
-        let result = unrolledRecords.filter(r => {
+        const result = unrolledRecords.filter(r => {
             const matchesSearch = (r.productName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                                  (r.receiptNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStaff = staffFilter ? r.salespersonId === staffFilter : true;
@@ -155,6 +155,8 @@ export const SalesRecordsPage: React.FC = () => {
         const ids = [...new Set(unrolledRecords.map(r => r.salespersonId))];
         return ids.map(id => ({ id, name: staffDict[id] || 'System' }));
     }, [unrolledRecords, staffDict]);
+
+    const canAccess = isSuperAdmin || isManager;
 
     if (!canAccess) return (
       <div className="h-[70vh] flex flex-col items-center justify-center animate-slide-up px-6">

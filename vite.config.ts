@@ -6,9 +6,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   plugins: [
     react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
+    /* VitePWA({
+       ... 
+    }) */
+  ],
+})
       includeAssets: [
         'favicon.ico',
         'favicon-16x16.png', 
