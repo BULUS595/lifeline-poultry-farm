@@ -152,24 +152,40 @@ export const supabaseDataService = {
    */
   async uploadStockImage(file: File): Promise<string | null> {
     try {
-      const fileExt = file.name.split('.').pop();
+      if (!file) throw new Error('No file provided for upload');
+      
+      const fileExt = file.name ? file.name.split('.').pop() : 'jpg';
       const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
       const filePath = `stock/${fileName}`;
 
-      const { error } = await supabase.storage.from('stock-images').upload(filePath, file);
+      // Try stock-images bucket first
+      const { error } = await supabase.storage.from('stock-images').upload(filePath, file, {
+        contentType: file.type,
+        cacheControl: '3600',
+        upsert: false
+      });
       
       if (error) {
-        // Fallback to 'public' bucket if 'stock-images' doesn't exist
-        const fb = await supabase.storage.from('public').upload(filePath, file);
-        if (fb.error) throw fb.error;
-        const { data } = supabase.storage.from('public').getPublicUrl(filePath);
-        return data.publicUrl;
+        console.warn('Initial storage bucket upload failed, attempting fallback...', error.message);
+        // Fallback if 'stock-images' doesn't exist
+        const fbBucket = error.message.includes('not found') ? 'public' : 'stock-images';
+        const fb = await supabase.storage.from(fbBucket).upload(filePath, file, {
+           contentType: file.type
+        });
+        
+        if (fb.error) {
+           console.error('All upload attempts failed:', fb.error);
+           throw fb.error;
+        }
+        
+        const { data: publicData } = supabase.storage.from(fbBucket).getPublicUrl(filePath);
+        return publicData.publicUrl;
       }
 
-      const { data } = supabase.storage.from('stock-images').getPublicUrl(filePath);
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Image upload error:', error);
+      const { data: publicData } = supabase.storage.from('stock-images').getPublicUrl(filePath);
+      return publicData.publicUrl;
+    } catch (error: any) {
+      console.error('Core Image upload error:', error);
       throw error;
     }
   },

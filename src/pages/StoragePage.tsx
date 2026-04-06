@@ -150,10 +150,15 @@ export const StoragePage: React.FC = () => {
         setActingItem('uploading');
         try {
             const url = await supabaseDataService.uploadStockImage(file);
-            if (url) setForm(f => ({ ...f, imageUrl: url }));
-            setToast({ message: 'Image uploaded successfully.', type: 'success' });
-        } catch {
-            setToast({ message: 'Image upload failed. Please try again.', type: 'error' });
+            if (url) {
+                setForm(f => ({ ...f, imageUrl: url }));
+                setToast({ message: 'Image successfully uploaded and attached.', type: 'success' });
+            } else {
+                throw new Error('Image reference could not be generated.');
+            }
+        } catch (err: any) {
+            setToast({ message: `Upload failed: ${err.message || 'Check your internet connection'}`, type: 'error' });
+            console.error('User upload error:', err);
         } finally {
             setActingItem(null);
         }
