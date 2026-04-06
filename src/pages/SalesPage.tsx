@@ -125,7 +125,10 @@ export const SalesPage: React.FC = () => {
             {/* Catalog Section */}
             <div className="flex-1 flex flex-col space-y-8 overflow-hidden bg-background/50 rounded-[40px] p-2 lg:p-6 lg:border border-border/20">
                 {/* Header with Search */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 px-4 pt-4 lg:pt-0">
+                <div className="flex items-center gap-6 px-4 pt-4 lg:pt-0">
+                    <button onClick={() => window.history.back()} className="p-4 bg-muted/20 hover:bg-muted/40 rounded-[24px] transition-all hover:scale-105 active:scale-95 border border-border/10">
+                        <X size={24} />
+                    </button>
                     <div className="flex-1">
                         <h1 className="text-3xl font-black tracking-tighter uppercase leading-none mb-1">POS <span className="text-primary italic">Terminal</span></h1>
                         <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-widest opacity-40 italic">Inventory disbursement system</p>

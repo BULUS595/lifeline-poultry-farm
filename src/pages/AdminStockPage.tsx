@@ -187,8 +187,11 @@ export const AdminStockPage: React.FC = () => {
     return (
         <div className="space-y-12 pb-20 animate-slide-up">
             <div className="flex flex-col md:flex-row gap-8 justify-between items-start md:items-end px-2">
-                <div>
-                   <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-5">
+                   <button onClick={() => window.history.back()} className="p-3 bg-muted/20 hover:bg-muted/40 rounded-2xl transition-all hover:scale-105 active:scale-95 border border-border/10">
+                       <X size={20} />
+                   </button>
+                   <div className="flex items-center gap-3">
                        <div className="p-3 bg-primary/10 text-primary rounded-2xl shadow-glow">
                            <ShieldCheck size={28} strokeWidth={2.5} />
                        </div>

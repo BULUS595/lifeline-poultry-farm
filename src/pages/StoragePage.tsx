@@ -303,8 +303,11 @@ export const StoragePage: React.FC = () => {
         <div className="space-y-16 animate-slide-up px-2 pb-24">
             {/* ── System Header ─────────────────────────────────────────── */}
             <div className="flex flex-col lg:flex-row gap-10 justify-between items-start lg:items-end px-4">
-                <div>
-                    <div className="flex items-center gap-5 mb-4">
+                <div className="flex items-center gap-6">
+                    <button onClick={() => window.history.back()} className="p-4 bg-muted/20 hover:bg-muted/40 rounded-[28px] transition-all hover:scale-105 active:scale-95 border border-border/10">
+                        <X size={24} />
+                    </button>
+                    <div className="flex items-center gap-5">
                         <div className="p-5 bg-primary/10 text-primary rounded-[32px] border-2 border-primary/20 shadow-glow animate-pulse-slow">
                             <Database size={36} strokeWidth={2.5} />
                         </div>
