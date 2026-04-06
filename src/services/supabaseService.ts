@@ -1,457 +1,46 @@
 import { createClient } from '@supabase/supabase-js';
-import type {
-  User,
-  Farm,
-  MortalityLog,
-  FeedingLog,
-  Expense,
-  Sale,
-  StockItem,
-  RetailSale,
-  StockActivityLog
-} from '../types';
+import { type StockItem, type RetailSale, type MortalityLog, type StockActivityLog } from '../types';
 
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Initialize Supabase client
-// TODO: Add your Supabase URL and Anon Key from https://app.supabase.com
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key';
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-/**
- * Authentication Service using Supabase
- */
-export const supabaseAuthService = {
-  /**
-   * Sign in user with email and password
-   */
-  async signIn(email: string, password: string) {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      // Get user profile from database
-      const userProfile = await this.getUserProfile(data.user?.id || '');
-
-      if (!userProfile) {
-        throw new Error('Access denied. No personnel record found for this identity in the Lifeline directory.');
-      }
-
-      return {
-        user: userProfile,
-        token: data.session?.access_token,
-      };
-    } catch (error) {
-      console.error('Sign in error:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Sign out current user
-   */
-  async signOut() {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      return { success: true };
-    } catch (error) {
-      console.error('Sign out error:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get current authenticated user
-   */
-  async getCurrentUser() {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      return await this.getUserProfile(user.id);
-    } catch (error) {
-      console.error('Get current user error:', error);
-      return null;
-    }
-  },
-
-  /**
-   * Get user profile from database
-   */
-  async getUserProfile(userId: string): Promise<User | null> {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) throw error;
-      return {
-        id: data.id,
-        email: data.email,
-        name: data.name,
-        role: data.role,
-        farmIds: data.farm_ids || [],
-        isActive: data.is_active,
-        createdAt: data.created_at,
-        lastLogin: data.last_login || undefined,
-      } as User;
-    } catch (error) {
-      console.error('Get user profile error:', error);
-      return null;
-    }
-  },
-
-  /**
-   * Check if user has permission for action
-   */
-  async hasPermission(userId: string, action: string, farmId?: string): Promise<boolean> {
-    try {
-      const user = await this.getUserProfile(userId);
-      if (!user) return false;
-
-      if (user.role === 'super_admin') return true;
-
-      if (farmId && !user.farmIds.includes(farmId)) return false;
-
-      // Role-based permissions
-      const permissions: Record<string, string[]> = {
-        super_admin: ['create', 'read', 'update', 'delete', 'manage_users', 'view_reports'],
-        manager: ['create', 'read', 'update', 'view_reports'],
-        accountant: ['read', 'view_reports'],
-        auditor: ['read', 'view_reports'],
-        sales_staff: ['create', 'read'],
-        inventory_staff: ['create', 'read'],
-        worker: ['create', 'read'],
-      };
-
-      return permissions[user.role]?.includes(action) || false;
-    } catch (error) {
-      console.error('Permission check error:', error);
-      return false;
-    }
-  },
-};
-
-/**
- * Data Service using Supabase
- */
 export const supabaseDataService = {
-
   /**
-   * Upload image to Supabase Storage
+   * Universal Image Upload Utility (Optimized for Telemetry)
    */
   async uploadStockImage(file: File): Promise<string | null> {
     try {
-      if (!file) throw new Error('No file provided for upload');
-      
-      const fileExt = file.name ? file.name.split('.').pop() : 'jpg';
-      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-      const filePath = `stock/${fileName}`;
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `stock-visuals/${fileName}`;
 
-      // Try stock-images bucket first
-      const { error } = await supabase.storage.from('stock-images').upload(filePath, file, {
-        contentType: file.type,
-        cacheControl: '3600',
-        upsert: false
-      });
-      
-      if (error) {
-        console.warn('Initial storage bucket upload failed, attempting fallback...', error.message);
-        // Fallback if 'stock-images' doesn't exist
-        const fbBucket = error.message.includes('not found') ? 'public' : 'stock-images';
-        const fb = await supabase.storage.from(fbBucket).upload(filePath, file, {
-           contentType: file.type
-        });
-        
-        if (fb.error) {
-           console.error('All upload attempts failed:', fb.error);
-           throw fb.error;
-        }
-        
-        const { data: publicData } = supabase.storage.from(fbBucket).getPublicUrl(filePath);
-        return publicData.publicUrl;
-      }
+      const { error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(filePath, file);
 
-      const { data: publicData } = supabase.storage.from('stock-images').getPublicUrl(filePath);
-      return publicData.publicUrl;
-    } catch (error: any) {
-      console.error('Core Image upload error:', error);
-      throw error;
-    }
-  },
+      if (uploadError) throw uploadError;
 
-  /**
-   * Add mortality log
-   */
-  async addMortalityLog(log: Omit<MortalityLog, 'id' | 'createdAt' | 'synced'>) {
-    try {
-      const dbLog = {
-        farm_id: log.farmId,
-        worker_id: log.workerId,
-        worker_name: log.workerName,
-        date: log.date,
-        count: log.count,
-        cause: log.cause,
-        batch_id: log.batchId,
-        notes: log.notes,
-        image_url: log.imageUrl,
-        synced: true,
-      };
+      const { data } = supabase.storage
+        .from('images')
+        .getPublicUrl(filePath);
 
-      const { data, error } = await supabase
-        .from('mortality_logs')
-        .insert([dbLog])
-        .select()
-        .single();
-
-      if (error) throw error;
-      return this._mapMortalityLog(data);
+      return data.publicUrl;
     } catch (error) {
-      console.error('Add mortality log error:', error);
-      throw error;
-    }
-  },
-
-  _mapMortalityLog(d: any): MortalityLog {
-    return {
-      id: d.id,
-      farmId: d.farm_id,
-      workerId: d.worker_id,
-      workerName: d.worker_name,
-      date: d.date,
-      count: d.count,
-      cause: d.cause,
-      batchId: d.batch_id,
-      notes: d.notes,
-      imageUrl: d.image_url,
-      createdAt: d.created_at,
-      synced: d.synced,
-    };
-  },
-
-  /**
-   * Get mortality logs for a farm
-   */
-  async getMortalityLogs(farmId: string, filters?: {
-    startDate?: string;
-    endDate?: string;
-    workerId?: string;
-  }) {
-    try {
-      let query = supabase
-        .from('mortality_logs')
-        .select('*')
-        .eq('farm_id', farmId)
-        .order('date', { ascending: false });
-
-      if (filters?.startDate) {
-        query = query.gte('date', filters.startDate);
-      }
-      if (filters?.endDate) {
-        query = query.lte('date', filters.endDate);
-      }
-      if (filters?.workerId) {
-        query = query.eq('worker_id', filters.workerId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []).map(d => this._mapMortalityLog(d));
-    } catch (error) {
-      console.error('Get mortality logs error:', error);
-      return [];
+      console.error('Image upload failed:', error);
+      return null;
     }
   },
 
   /**
-   * Update mortality log
+   * Inventory Normalization Engine
+   * Maps DB snake_case to Frontend camelCase and normalizes status strings
    */
-  async updateMortalityLog(id: string, updates: Partial<MortalityLog>) {
-    try {
-      const { data, error } = await supabase
-        .from('mortality_logs')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as MortalityLog;
-    } catch (error) {
-      console.error('Update mortality log error:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Delete mortality log
-   */
-  async deleteMortalityLog(id: string) {
-    try {
-      const { error } = await supabase.from('mortality_logs').delete().eq('id', id);
-      if (error) throw error;
-      return { success: true };
-    } catch (error) {
-      console.error('Delete mortality log error:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Add feeding log
-   */
-  async addFeedingLog(log: Omit<FeedingLog, 'id' | 'createdAt' | 'synced'>) {
-    try {
-      const { data, error } = await supabase
-        .from('feeding_logs')
-        .insert([{ ...log, synced: true }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as FeedingLog;
-    } catch (error) {
-      console.error('Add feeding log error:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get feeding logs for a farm
-   */
-  async getFeedingLogs(farmId: string, filters?: {
-    startDate?: string;
-    endDate?: string;
-  }) {
-    try {
-      let query = supabase
-        .from('feeding_logs')
-        .select('*')
-        .eq('farm_id', farmId)
-        .order('date', { ascending: false });
-
-      if (filters?.startDate) {
-        query = query.gte('date', filters.startDate);
-      }
-      if (filters?.endDate) {
-        query = query.lte('date', filters.endDate);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as FeedingLog[];
-    } catch (error) {
-      console.error('Get feeding logs error:', error);
-      return [];
-    }
-  },
-
-  /**
-   * Add expense
-   */
-  async addExpense(expense: Omit<Expense, 'id' | 'createdAt'>) {
-    try {
-      const { data, error } = await supabase
-        .from('expenses')
-        .insert([expense])
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as Expense;
-    } catch (error) {
-      console.error('Add expense error:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get expenses for a farm
-   */
-  async getExpenses(farmId: string, filters?: {
-    startDate?: string;
-    endDate?: string;
-    category?: string;
-  }) {
-    try {
-      let query = supabase
-        .from('expenses')
-        .select('*')
-        .eq('farm_id', farmId)
-        .order('date', { ascending: false });
-
-      if (filters?.startDate) {
-        query = query.gte('date', filters.startDate);
-      }
-      if (filters?.endDate) {
-        query = query.lte('date', filters.endDate);
-      }
-      if (filters?.category) {
-        query = query.eq('category', filters.category);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as Expense[];
-    } catch (error) {
-      console.error('Get expenses error:', error);
-      return [];
-    }
-  },
-
-  /**
-   * Add sale
-   */
-  async addSale(sale: Omit<Sale, 'id' | 'createdAt'>) {
-    try {
-      const { data, error } = await supabase
-        .from('sales')
-        .insert([sale])
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as Sale;
-    } catch (error) {
-      console.error('Add sale error:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Get sales for a farm
-   */
-  async getSales(farmId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('sales')
-        .select('*')
-        .eq('farm_id', farmId)
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-      return data as Sale[];
-    } catch (error) {
-      console.error('Get sales error:', error);
-      return [];
-    }
-  },
-
-  /**
-   * Stock Management Operations (Approval Workflow)
-   */
-
   _mapStockItem(item: any): StockItem {
+    const rawStatus = (item.status || 'PENDING_APPROVAL').toUpperCase();
+    const finalStatus = (rawStatus === 'PENDING') ? 'PENDING_APPROVAL' : rawStatus;
+    
     return {
       id: item.id || '',
       name: item.name || 'Unnamed Product',
@@ -462,7 +51,7 @@ export const supabaseDataService = {
       description: item.description || '',
       minThreshold: item.min_threshold || 0,
       imageUrl: item.image_url,
-      status: item.status || 'PENDING_APPROVAL',
+      status: finalStatus as any,
       submittedBy: item.submitted_by || '',
       submittedByName: item.submitted_by_name || 'System',
       rejectionComment: item.rejection_comment,
@@ -473,51 +62,13 @@ export const supabaseDataService = {
     };
   },
 
-  _mapActivityLog(log: any): StockActivityLog {
-    return {
-      id: log.id,
-      actionType: log.action_type,
-      performedBy: log.performed_by,
-      performedByRole: log.performed_by_role,
-      performedByName: log.performed_by_name,
-      stockId: log.stock_id,
-      stockName: log.stock_name,
-      price: log.price,
-      quantity: log.quantity,
-      imageUrl: log.image_url,
-      message: log.message,
-      timestamp: log.timestamp,
-    };
-  },
-
-  /** Private helper for activity logging */
-  async logStockActivity(activity: Omit<StockActivityLog, 'id' | 'timestamp'>) {
-    try {
-      await supabase.from('stock_activity_logs').insert([{
-        action_type: activity.actionType,
-        performed_by: activity.performedBy,
-        performed_by_role: activity.performedByRole,
-        performed_by_name: activity.performedByName,
-        stock_id: activity.stockId,
-        stock_name: activity.stockName,
-        price: activity.price,
-        quantity: activity.quantity,
-        image_url: activity.imageUrl,
-        message: activity.message
-      }]);
-    } catch (err) {
-      console.error('Logging error:', err);
-    }
-  },
-
-
-  /** APPROVED items only — Sales Staff view */
+  /** Fetch live stock — For Sales terminal (Only Approved & Available) */
   async getStockItems(_farmId?: string): Promise<StockItem[]> {
     try {
       const { data, error } = await supabase
         .from('stock_items')
         .select('*')
-        .eq('status', 'APPROVED')
+        .or('status.eq.APPROVED,status.eq.approved')
         .gt('quantity', 0)
         .order('name', { ascending: true });
 
@@ -529,7 +80,7 @@ export const supabaseDataService = {
     }
   },
 
-  /** All items (excluding DELETED) — Stock management view */
+  /** Fetch all items — For Admin Sector and Inventory HUB */
   async getAllStockItems(_farmId?: string): Promise<StockItem[]> {
     try {
       const { data, error } = await supabase
@@ -546,227 +97,76 @@ export const supabaseDataService = {
     }
   },
 
-  /** ONLY DELETED logs — for Admin Log View */
-  async getDeletedStockLogs(): Promise<StockActivityLog[]> {
+  /** Submit new stock for verification */
+  async submitStockItem(item: Partial<StockItem>, userId: string, userName: string, userRole: string): Promise<StockItem | null> {
     try {
-      const { data, error } = await supabase
-        .from('stock_activity_logs')
-        .select('*')
-        .eq('action_type', 'DELETE')
-        .order('timestamp', { ascending: false });
-
-      if (error) throw error;
-      return (data || []).map((log: any) => this._mapActivityLog(log));
-    } catch (error) {
-      console.error('Get deleted stock logs error:', error);
-      return [];
-    }
-  },
-
-
-  /** Inventory Staff submits for admin approval */
-  async submitStockItem(
-    item: Pick<StockItem, 'name' | 'quantity' | 'unitPrice' | 'unit' | 'minThreshold' | 'category' | 'description' | 'imageUrl' | 'farmId'>,
-    submittedBy: string,
-    submittedByName: string,
-    userRole: string
-  ): Promise<StockItem | null> {
-    try {
-      const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.farmId || '');
-      const { data, error } = await supabase
-        .from('stock_items')
-        .insert([{
+       const payload = {
           name: item.name,
           quantity: item.quantity,
           unit_price: item.unitPrice,
           unit: item.unit,
-          category: item.category || 'other',
-          description: item.description || '',
-          min_threshold: item.minThreshold,
-          image_url: item.imageUrl || null,
-          farm_id: isValidUUID ? item.farmId : null,
+          category: item.category,
+          image_url: item.imageUrl,
           status: 'PENDING_APPROVAL',
-          submitted_by: submittedBy,
-          submitted_by_name: submittedByName,
+          submitted_by: userId,
+          submitted_by_name: userName,
           last_updated: new Date().toISOString(),
-        }])
-        .select()
-        .single();
+          farm_id: '1'
+       };
 
-      if (error) throw error;
+       const { data, error } = await supabase
+         .from('stock_items')
+         .insert([payload])
+         .select()
+         .single();
 
-      // Activity Log
-      await this.logStockActivity({
-        actionType: 'CREATE',
-        stockId: data.id,
-        stockName: data.name,
-        price: data.unit_price,
-        quantity: data.quantity,
-        imageUrl: data.image_url,
-        performedBy: submittedBy,
-        performedByName: submittedByName,
-        performedByRole: userRole,
-        message: `Inventory added new stock: ${data.name}`
-      });
+       if (error) throw error;
 
-      // Admin Notifications
-      await supabase.from('stock_notifications').insert([
-        { stock_item_id: data.id, recipient_role: 'super_admin', message: 'New stock sent for approval' },
-        { stock_item_id: data.id, recipient_role: 'manager', message: 'New stock sent for approval' }
-      ]);
+       // Activity Log
+       await this.logStockActivity({
+         actionType: 'CREATE',
+         stockId: data.id,
+         stockName: data.name,
+         price: data.unit_price,
+         quantity: data.quantity,
+         imageUrl: data.image_url,
+         performedBy: userId,
+         performedByName: userName,
+         performedByRole: userRole,
+         message: `New stock submitted for approval: ${data.name}`,
+         timestamp: new Date().toISOString()
+       });
 
-      return this._mapStockItem(data);
+       return this._mapStockItem(data);
     } catch (error) {
-      console.error('Submit stock item error:', error);
+      console.error('Submit stock error:', error);
       return null;
     }
   },
 
-
-  /** Admin edits any pending or approved item */
-  /** Update stock values natively (Restocking/Admin logic) */
-  async updateStockItem(id: string, updates: Partial<StockItem>, user: { id: string, name: string, role: string }): Promise<boolean> {
+  /** Approve stock item — Launches it to Sales Terminal */
+  async approveStockItem(id: string, admin: { id: string, name: string, role: string }): Promise<boolean> {
     try {
-      // Get current item first to check its status
-      const { data: current } = await supabase.from('stock_items').select('status, quantity').eq('id', id).single();
-      
-      const dbUpdates: any = { last_updated: new Date().toISOString() };
-      if (updates.name !== undefined) dbUpdates.name = updates.name;
-      if (updates.quantity !== undefined) {
-         dbUpdates.quantity = updates.quantity;
-         // Automatically lift 'OUT_OF_STOCK' restriction if restocked
-         if (current && current.status === 'OUT_OF_STOCK' && updates.quantity > 0) {
-             dbUpdates.status = 'APPROVED';
-         }
-      }
-      if (updates.unitPrice !== undefined) dbUpdates.unit_price = updates.unitPrice;
-      if (updates.minThreshold !== undefined) dbUpdates.min_threshold = updates.minThreshold;
-      if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
-      if (updates.category !== undefined) dbUpdates.category = updates.category;
-      if (updates.description !== undefined) dbUpdates.description = updates.description;
-
-      const { data, error } = await supabase
-        .from('stock_items')
-        .update(dbUpdates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Activity Log
-      await this.logStockActivity({
-        actionType: 'EDIT',
-        stockId: id,
-        stockName: data.name,
-        price: data.unit_price,
-        quantity: data.quantity,
-        imageUrl: data.image_url,
-        performedBy: user.id,
-        performedByName: user.name,
-        performedByRole: user.role,
-        message: `Admin/Manager edited stock: ${data.name}`
-      });
-
-      return true;
-    } catch (error) {
-      console.error('Update stock item error:', error);
-      return false;
-    }
-  },
-
-  /** Soft Delete logic with tracking — Inventory deletes their own, Admin deletes any */
-  async deleteStockItem(id: string, user: { id: string, name: string, role: string }): Promise<boolean> {
-    try {
-      // Get current item details for logging
       const { data: item } = await supabase.from('stock_items').select('*').eq('id', id).single();
-      if (!item) return false;
-
       const { error } = await supabase
         .from('stock_items')
-        .update({
-          status: 'DELETED',
-          deleted_by: user.id,
-          deleted_at: new Date().toISOString(),
-          last_updated: new Date().toISOString(),
-        })
+        .update({ status: 'APPROVED', last_updated: new Date().toISOString() })
         .eq('id', id);
-
       if (error) throw error;
 
-      // Activity Log
       await this.logStockActivity({
-        actionType: 'DELETE',
+        actionType: 'APPROVE',
         stockId: id,
         stockName: item.name,
         price: item.unit_price,
         quantity: item.quantity,
         imageUrl: item.image_url,
-        performedBy: user.id,
-        performedByName: user.name,
-        performedByRole: user.role,
-        message: user.role === 'inventory_staff'
-          ? `Inventory deleted a stock: ${item.name}`
-          : `Admin deleted a stock: ${item.name}`
+        performedBy: admin.id,
+        performedByName: admin.name,
+        performedByRole: admin.role,
+        message: `Admin approved stock: ${item.name}`,
+        timestamp: new Date().toISOString()
       });
-
-      // Notify Admin on deletion if not done by an admin themselves
-      if (user.role === 'inventory_staff') {
-        await supabase.from('stock_notifications').insert([
-          { stock_item_id: id, recipient_role: 'super_admin', message: 'Inventory deleted a stock' },
-          { stock_item_id: id, recipient_role: 'manager', message: 'Inventory deleted a stock' }
-        ]);
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Delete stock item error:', error);
-      return false;
-    }
-  },
-
-
-  /** Admin approves a pending submission */
-  async approveStockItem(id: string, admin: { id: string, name: string, role: string }): Promise<boolean> {
-    try {
-      const { data, error } = await supabase
-        .from('stock_items')
-        .update({ 
-          status: 'APPROVED', 
-          rejection_comment: null, 
-          last_updated: new Date().toISOString(),
-          approved_by: admin.id,
-          approved_by_name: admin.name,
-          approved_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Approve stock DB error:', JSON.stringify(error));
-        throw error;
-      }
-
-      // Activity Log (best-effort)
-      try {
-        await this.logStockActivity({
-          actionType: 'APPROVE',
-          stockId: id,
-          stockName: data.name,
-          price: data.unit_price,
-          quantity: data.quantity,
-          imageUrl: data.image_url,
-          performedBy: admin.id,
-          performedByName: admin.name,
-          performedByRole: admin.role,
-          message: `Admin approved stock: ${data.name}`
-        });
-        await supabase.from('stock_notifications').insert([
-          { stock_item_id: id, recipient_role: 'inventory_staff', message: 'Stock approved' },
-          { stock_item_id: id, recipient_role: 'sales_staff', message: 'New stock available' }
-        ]);
-      } catch (_) { /* log failures shouldn't block the approval */ }
 
       return true;
     } catch (error) {
@@ -775,7 +175,7 @@ export const supabaseDataService = {
     }
   },
 
-  /** Admin rejects with a comment */
+  /** Reject stock item — Blocks it from Sales Terminal */
   async rejectStockItem(id: string, comment: string, admin: { id: string, name: string, role: string }): Promise<boolean> {
     try {
       const { data: item } = await supabase.from('stock_items').select('*').eq('id', id).single();
@@ -785,7 +185,6 @@ export const supabaseDataService = {
         .eq('id', id);
       if (error) throw error;
 
-      // Activity Log
       await this.logStockActivity({
         actionType: 'REJECT',
         stockId: id,
@@ -796,15 +195,9 @@ export const supabaseDataService = {
         performedBy: admin.id,
         performedByName: admin.name,
         performedByRole: admin.role,
-        message: `Admin rejected stock: ${item.name} (${comment})`
+        message: `Admin rejected stock: ${item.name} (${comment})`,
+        timestamp: new Date().toISOString()
       });
-
-      // Inventory Feedback Notification
-      await supabase.from('stock_notifications').insert([{
-        stock_item_id: id,
-        recipient_role: 'inventory_staff',
-        message: 'Stock rejected'
-      }]);
 
       return true;
     } catch (error) {
@@ -813,25 +206,97 @@ export const supabaseDataService = {
     }
   },
 
+  /** Update stock item details */
+  async updateStockItem(id: string, updates: Partial<StockItem>, admin: { id: string, name: string, role: string }): Promise<boolean> {
+    try {
+      const payload: any = { last_updated: new Date().toISOString() };
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.quantity !== undefined) payload.quantity = updates.quantity;
+      if (updates.unitPrice !== undefined) payload.unit_price = updates.unitPrice;
+      if (updates.imageUrl !== undefined) payload.image_url = updates.imageUrl;
 
-  /**
-   * Retail Sales Operations
-   */
+      const { error } = await supabase.from('stock_items').update(payload).eq('id', id);
+      if (error) throw error;
 
-  /** Fetch all retail sales — for Admin and Sales History view (Role Based) */
+      await this.logStockActivity({
+        actionType: 'EDIT',
+        stockId: id,
+        stockName: updates.name || 'Stock Item',
+        price: updates.unitPrice || 0,
+        quantity: updates.quantity || 0,
+        performedBy: admin.id,
+        performedByName: admin.name,
+        performedByRole: admin.role,
+        message: `Admin updated stock details: ${updates.name || id}`,
+        timestamp: new Date().toISOString()
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Update item error:', error);
+      return false;
+    }
+  },
+
+  /** Delete stock item logically */
+  async deleteStockItem(id: string, admin: { id: string, name: string, role: string }): Promise<boolean> {
+    try {
+      const { data: item } = await supabase.from('stock_items').select('*').eq('id', id).single();
+      const { error } = await supabase
+        .from('stock_items')
+        .update({ status: 'DELETED', last_updated: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+
+      await this.logStockActivity({
+        actionType: 'DELETE',
+        stockId: id,
+        stockName: item.name,
+        performedBy: admin.id,
+        performedByName: admin.name,
+        performedByRole: admin.role,
+        message: `Admin deleted item: ${item.name}`,
+        timestamp: new Date().toISOString(),
+        price: item.unit_price,
+        quantity: item.quantity
+      });
+      return true;
+    } catch (error) {
+      console.error('Delete error:', error);
+      return false;
+    }
+  },
+
+  /** Log activity record */
+  async logStockActivity(log: Omit<StockActivityLog, 'id' | 'createdAt'>): Promise<void> {
+    try {
+      const payload = {
+        action_type: log.actionType,
+        stock_id: log.stockId,
+        stock_name: log.stockName,
+        price: log.price,
+        quantity: log.quantity,
+        image_url: log.imageUrl,
+        performed_by: log.performedBy,
+        performed_by_name: log.performedByName,
+        performed_by_role: log.performedByRole,
+        message: log.message,
+        farm_id: '1',
+        timestamp: log.timestamp
+      };
+      await supabase.from('stock_activity_logs').insert([payload]);
+    } catch (err) {
+      console.error('Activity log error:', err);
+    }
+  },
+
+  /** Fetch all retail sales */
   async getRetailSales(userProfile?: { id: string; role: string }): Promise<{ success: boolean; data: RetailSale[]; message: string }> {
     try {
-      if (userProfile && (userProfile.role.includes('inventory') || userProfile.role === 'worker')) {
-         return { success: false, data: [], message: 'Unauthorized: Inventory staff cannot access sales data.' };
-      }
-
       let query = supabase.from('retail_sales').select('*').order('created_at', { ascending: false }).limit(300);
-
-      // If sales role, restrict query to their own sales for privacy
       if (userProfile && (userProfile.role === 'sales' || userProfile.role === 'sales_staff')) {
          query = query.eq('salesperson_id', userProfile.id);
       }
-
       const { data, error } = await query;
       if (error) throw error;
       const parsed = (data || []).map((d: any) => ({
@@ -845,25 +310,17 @@ export const supabaseDataService = {
         createdAt: d.created_at || new Date().toISOString(),
         farmId: d.farm_id || '1',
       }));
-      return { success: true, data: parsed, message: 'Sales records retrieved successfully' };
+      return { success: true, data: parsed, message: 'Retrieved' };
     } catch (error: any) {
-      console.error('Get retail sales error:', error);
-      return { success: false, data: [], message: error?.message || 'Database link error' };
+      return { success: false, data: [], message: error?.message || 'DB Error' };
     }
   },
 
+  /** Record sale via RPC (Atomic check & decrement) */
   async recordRetailSale(sale: Omit<RetailSale, 'id' | 'createdAt'>): Promise<RetailSale | null> {
     try {
-      // Step 1: Use the atomic RPC transaction function
-      // This locks rows, reduces quantities, stops overselling, triggers alerts, and inserts the sale.
       const { data, error } = await supabase.rpc('process_retail_sale', { payload: sale });
-
-      if (error) {
-         // Supabase pg_raise exception surfaces here, allowing us to parse the message
-         throw new Error(error.message);
-      }
-
-      // Step 2: Return formatted representation
+      if (error) throw new Error(error.message);
       return {
         id: data.id || '',
         receiptNumber: data.receiptNumber || 'N/A',
@@ -876,103 +333,48 @@ export const supabaseDataService = {
         farmId: data.farmId || '1'
       };
     } catch (error: any) {
-      console.error('Record retail sale transaction error:', error);
-      throw error; // Let the UI catch and display specific constraint messages
+      console.error('Retail sale error:', error);
+      throw error;
     }
   },
 
-  /**
-   * Subscribe to real-time updates
-   */
-  subscribeToTable(
-    table: string,
-    callback: (event: any) => void,
-    filter?: string
-  ) {
-    const channel = supabase
-      .channel(`public:${table} `)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: table,
-          filter: filter,
-        },
-        payload => callback(payload)
-      )
-      .subscribe();
-
-    return channel;
-  },
-
-  async clearOperationalData() {
+  /** Mortality Log Operations (Typed for Batch/Farm Mortality) */
+  async addMortalityLog(log: Omit<MortalityLog, 'id' | 'createdAt' | 'synced'>): Promise<MortalityLog | null> {
     try {
-      // Nukes the transactional records to start fresh for launch
-      const results = await Promise.all([
-        supabase.from('retail_sales').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('mortality_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('feeding_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('stock_activity_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-        supabase.from('expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-      ]);
-      const error = results.find(r => r.error);
-      if (error) throw error.error;
-      return { success: true };
-    } catch (err: any) {
-      console.error('Core reset failed:', err);
-      return { success: false, message: err.message };
-    }
-  },
-
-  async clearAllInventory() {
-    try {
-      // Deletes all stock items to start catalog from scratch
-      const { error } = await supabase.from('stock_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      const payload = {
+        farm_id: log.farmId || '1',
+        worker_id: log.workerId,
+        worker_name: log.workerName,
+        date: log.date || new Date().toISOString(),
+        count: log.count || 0,
+        cause: log.cause,
+        batch_id: log.batchId,
+        notes: log.notes,
+        image_url: log.imageUrl,
+        created_at: new Date().toISOString(),
+        synced: true
+      };
+      const { data, error } = await supabase.from('mortality_logs').insert([payload]).select().single();
       if (error) throw error;
-      return { success: true };
-    } catch (err: any) {
-      console.error('Inventory clearing failed:', err);
-      return { success: false, message: err.message };
+      return {
+        id: data.id,
+        farmId: data.farm_id,
+        workerId: data.worker_id,
+        workerName: data.worker_name,
+        date: data.date,
+        count: data.count,
+        cause: data.cause,
+        batchId: data.batch_id,
+        notes: data.notes,
+        imageUrl: data.image_url,
+        createdAt: data.created_at,
+        synced: data.synced
+      };
+    } catch (err) {
+      console.error('Mortality error:', err);
+      return null;
     }
   }
 };
-
-/**
- * Get farms for current user
- */
-export async function getUserFarms(userId: string): Promise<Farm[]> {
-  try {
-    const { data, error } = await supabase
-      .from('farms')
-      .select('*')
-      .or(`managed_by.eq.${userId}, staff_ids.cs.{${userId} } `);
-
-    if (error) throw error;
-    return data as Farm[];
-  } catch (error) {
-    console.error('Get user farms error:', error);
-    return [];
-  }
-}
-
-/**
- * Get farm details
- */
-export async function getFarmDetails(farmId: string): Promise<Farm | null> {
-  try {
-    const { data, error } = await supabase
-      .from('farms')
-      .select('*')
-      .eq('id', farmId)
-      .single();
-
-    if (error) throw error;
-    return data as Farm;
-  } catch (error) {
-    console.error('Get farm details error:', error);
-    return null;
-  }
-}
 
 export default supabase;

@@ -95,7 +95,7 @@ export const StoragePage: React.FC = () => {
         setIsLoading(true);
         setHasError(false);
         try {
-            const data = await supabaseDataService.getAllStockItems('farm-1');
+            const data = await supabaseDataService.getAllStockItems();
             if (canManageAll) {
                 setItems(data || []);
             } else {
