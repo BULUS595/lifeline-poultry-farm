@@ -83,9 +83,14 @@ const Toast = ({ message, type }: { message: string; type: 'success' | 'error' }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const StoragePage: React.FC = () => {
-    const { user, isInventory, isAdmin } = useAuth();
-    // Re-check Admin View logic: it should be true if user is Admin OR Inventory since they manage the stock
-    const isAdminView = isAdmin || isInventory;
+    const { user, isInventory, isAdmin, isManager } = useAuth();
+    
+    // Separation of concerns: 
+    // - Managers/Admins can see everything and approve
+    // - Inventory staff can add/submit but not approve
+    const canApprove = isAdmin || isManager;
+    const canAddStock = isAdmin || isInventory || isManager;
+    const canManageAll = isAdmin || isManager;
 
     const [filterStatus, setFilterStatus] = useState<string>(
         isAdmin ? 'PENDING_APPROVAL' : 'all'
@@ -122,17 +127,18 @@ export const StoragePage: React.FC = () => {
         setHasError(false);
         try {
             const data = await supabaseDataService.getAllStockItems('farm-1');
-            if (!isAdminView && user?.role !== 'inventory_officer') {
-                setItems((data || []).filter(i => i.submittedBy === user?.id));
-            } else {
+            if (canManageAll) {
                 setItems(data || []);
+            } else {
+                // Regular staff only see their own submissions OR approved items
+                setItems((data || []).filter(i => i.submittedBy === user?.id || i.status === 'APPROVED'));
             }
         } catch {
             setHasError(true);
         } finally {
             setIsLoading(false);
         }
-    }, [user, isAdminView]);
+    }, [user, canManageAll]);
 
     useEffect(() => {
         loadData();
@@ -249,7 +255,7 @@ export const StoragePage: React.FC = () => {
 
     // Admin actions
     const handleApprove = async (item: StockItem) => {
-        if (!user || !isAdminView) return;
+        if (!user || !canApprove) return;
         setActingItem(item.id);
         try {
             const ok = await supabaseDataService.approveStockItem(item.id, { id: user.id, name: user.name, role: user.role });
@@ -263,7 +269,7 @@ export const StoragePage: React.FC = () => {
     };
 
     const handleReject = async (item: StockItem) => {
-        if (!user || !isAdminView) return;
+        if (!user || !canApprove) return;
         const comment = prompt('Reason for rejection (optional):');
         if (comment === null) return;
         setActingItem(item.id);
@@ -309,7 +315,7 @@ export const StoragePage: React.FC = () => {
                 </div>
 
                 {/* Only inventory staff and admins can see this button */}
-                {isAdminView && (
+                {canAddStock && (
                     <Button
                         variant="primary"
                         className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-black italic shadow-lg shadow-primary/20 transition-all hover:brightness-110 active:scale-95"
@@ -370,7 +376,7 @@ export const StoragePage: React.FC = () => {
                 <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border-2 border-dashed border-border/40">
                     <Database size={48} className="text-muted-foreground/30 mb-3" />
                     <p className="text-sm font-semibold text-muted-foreground">No stock items found</p>
-                    {!isAdminView && (
+                    {canAddStock && (
                         <button onClick={openNewForm} className="mt-3 text-xs text-primary underline">
                             Add your first item
                         </button>
@@ -399,8 +405,8 @@ export const StoragePage: React.FC = () => {
                                     </div>
                                 )}
 
-                                {/* Admin hover overlay */}
-                                {isAdminView && item.status === 'PENDING_APPROVAL' && (
+                                 {/* Admin hover overlay - ONLY for those with approval permission */}
+                                {canApprove && item.status === 'PENDING_APPROVAL' && (
                                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-3">
                                         <button
                                             onClick={() => handleApprove(item)}
@@ -449,8 +455,8 @@ export const StoragePage: React.FC = () => {
                                             onClick={() => openEditForm(item)}
                                             disabled={
                                                 !!actingItem ||
-                                                (!isAdminView && item.status === 'PENDING_APPROVAL') ||
-                                                (!isAdminView && item.status === 'APPROVED')
+                                                (!canManageAll && item.status === 'PENDING_APPROVAL') ||
+                                                (!canManageAll && item.status === 'APPROVED')
                                             }
                                             className="p-2 rounded-lg border border-border/40 hover:text-primary hover:border-primary/40 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                                         >
@@ -460,8 +466,8 @@ export const StoragePage: React.FC = () => {
                                             onClick={() => handleDelete(item)}
                                             disabled={
                                                 !!actingItem ||
-                                                (!isAdminView && item.status === 'PENDING_APPROVAL') ||
-                                                (!isAdminView && item.status === 'APPROVED')
+                                                (!canManageAll && item.status === 'PENDING_APPROVAL') ||
+                                                (!canManageAll && item.status === 'APPROVED')
                                             }
                                             className="p-2 rounded-lg border border-border/40 hover:text-rose-500 hover:border-rose-400/40 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                                         >

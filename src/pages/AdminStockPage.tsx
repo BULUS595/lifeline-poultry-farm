@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
     CheckCircle2, Package, Search, AlertTriangle,
     Trash2, RefreshCw, X, ShieldCheck, Edit3,
-    ShoppingBag, Banknote, Smartphone, CreditCard,
-    ArrowUpRight, TrendingUp, History,
-    UserCheck, Clock, ShieldX
+    ShoppingBag, TrendingUp, Clock, ShieldX,
+    ArrowUpRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Skeleton } from '../components/Skeleton';
@@ -14,12 +13,6 @@ import { type StockItem, type RetailSale } from '../types';
 import { Card, Button, Badge, Modal, Input, Label } from '../components/ui';
 
 type Tab = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SALES_HISTORY' | 'OUT_OF_STOCK';
-
-const PAY_ICONS: Record<string, React.ReactNode> = {
-    cash: <Banknote size={14} />,
-    transfer: <Smartphone size={14} />,
-    pos: <CreditCard size={14} />,
-};
 
 export const AdminStockPage: React.FC = () => {
     const { user, isSuperAdmin, isManager } = useAuth();
@@ -143,20 +136,26 @@ export const AdminStockPage: React.FC = () => {
 
     return (
         <div className="space-y-12 pb-20 animate-slide-up">
-            {/* Header */}
             <div className="flex flex-col md:flex-row gap-8 justify-between items-start md:items-end px-2">
                 <div>
-                   <h1 className="text-4xl font-black tracking-tighter uppercase leading-none text-primary">
-                     Stock <span className="text-foreground">Admin</span>
-                   </h1>
-                   <p className="text-muted-foreground font-bold text-[9px] uppercase tracking-widest mt-3 opacity-50 italic">Inventory control and sales history</p>
+                   <div className="flex items-center gap-3 mb-4">
+                       <div className="p-3 bg-primary/10 text-primary rounded-2xl shadow-glow">
+                           <ShieldCheck size={28} strokeWidth={2.5} />
+                       </div>
+                       <div>
+                           <h1 className="text-4xl font-black tracking-tighter uppercase leading-none">
+                             Governance <span className="text-primary italic">HUB</span>
+                           </h1>
+                           <p className="text-muted-foreground font-bold text-[9px] uppercase tracking-widest mt-1.5 opacity-50 italic">Stock Approval & Quality Control</p>
+                       </div>
+                   </div>
                 </div>
                 <div className="flex items-center gap-4 w-full md:w-auto">
                    <div className="relative flex-1 md:w-80 group">
                       <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                      <Input type="text" placeholder="Search products..." className="pl-12 h-14 rounded-[20px] bg-card border-border/40" value={search} onChange={e => setSearch(e.target.value)} />
+                      <Input type="text" placeholder="Filter submissions..." className="pl-12 h-14 rounded-[24px] bg-card/50 border-border/40 backdrop-blur-sm shadow-inner" value={search} onChange={e => setSearch(e.target.value)} />
                    </div>
-                   <Button variant="outline" size="icon" onClick={loadStock} className="rounded-xl w-14 h-14 bg-card border-border/40 shadow-sm"><RefreshCw className={isLoading ? 'animate-spin' : ''} size={20} /></Button>
+                   <Button variant="outline" size="icon" onClick={loadStock} className="rounded-2xl w-14 h-14 bg-card border-border/40 shadow-sm hover:text-primary transition-all"><RefreshCw className={isLoading ? 'animate-spin' : ''} size={20} /></Button>
                 </div>
             </div>
 
@@ -275,13 +274,27 @@ export const AdminStockPage: React.FC = () => {
                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-40">{item.quantity} {item.unit} in stock</p>
                                     </div>
 
-                                    <div className="flex items-center gap-3">
-                                       {item.status === 'PENDING_APPROVAL' && (
-                                          <>
-                                             <Button className="rounded-xl h-12 px-6 bg-emerald-500 hover:bg-emerald-600 font-bold uppercase text-[9px] tracking-widest shadow-md" onClick={() => approve(item)} isLoading={acting === item.id}>Approve</Button>
-                                             <Button variant="outline" className="rounded-xl h-12 px-6 border-rose-500/40 text-rose-600 font-bold uppercase text-[9px] tracking-widest" onClick={() => { setRejectItem(item); setRejectNote(''); }}>Reject</Button>
-                                          </>
-                                       )}
+                                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                                        {item.status === 'PENDING_APPROVAL' && (
+                                           <>
+                                              <Button 
+                                                className="rounded-2xl h-14 px-8 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[10px] tracking-[0.1em] shadow-glow active:scale-95 transition-all w-full sm:w-auto" 
+                                                onClick={() => approve(item)} 
+                                                isLoading={acting === item.id}
+                                                leftIcon={CheckCircle2}
+                                              >
+                                                Approve
+                                              </Button>
+                                              <Button 
+                                                variant="outline" 
+                                                className="rounded-2xl h-14 px-8 border-rose-500/30 text-rose-500 font-black uppercase text-[10px] tracking-[0.1em] hover:bg-rose-500/5 active:scale-95 transition-all w-full sm:w-auto" 
+                                                onClick={() => { setRejectItem(item); setRejectNote(''); }}
+                                                leftIcon={ShieldX}
+                                              >
+                                                Reject
+                                              </Button>
+                                           </>
+                                        )}
                                        <div className="flex items-center gap-2">
                                            <Button variant="outline" size="icon" className="w-12 h-12 rounded-xl bg-card border-border/40 text-muted-foreground hover:text-primary transition-all" onClick={() => { setEditItem(item); setEditName(item.name); setEditQty(String(item.quantity)); setEditPrice(String(item.unitPrice)); }}><Edit3 size={18} /></Button>
                                            <Button variant="outline" size="icon" className="w-12 h-12 rounded-xl bg-card border-border/40 text-muted-foreground hover:text-rose-500 transition-all" onClick={() => deleteItem(item)} isLoading={acting === item.id}><Trash2 size={18} /></Button>
