@@ -146,7 +146,7 @@ export const DashboardPage: React.FC = () => {
   const canViewLogs = isSuperAdmin || isManager || isAuditor;
 
   return (
-    <div className="space-y-12 pb-20 animate-slide-up">
+    <div className="space-y-12 animate-slide-up">
       {/* Header */}
       <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-center px-2">
           <div>

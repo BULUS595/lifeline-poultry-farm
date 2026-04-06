@@ -1,17 +1,12 @@
 import React, { useState } from 'react';
 import { 
-  Globe, 
   Phone, 
-  Building, 
   User, 
-  Shield, 
   Calendar, 
   LogOut, 
   ShieldCheck, 
   Zap, 
-  ChevronRight,
   ShieldAlert,
-  Database,
   Trash2,
   AlertTriangle,
   RefreshCw,
@@ -52,7 +47,7 @@ export const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-12 pb-20 animate-slide-up">
+    <div className="max-w-5xl mx-auto space-y-12 animate-slide-up">
       {/* Profile Header */}
       <div className="relative">
         <div className="h-48 w-full bg-slate-900 rounded-[40px] border-2 border-border/40 overflow-hidden relative shadow-lg">

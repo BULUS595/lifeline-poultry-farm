@@ -121,7 +121,7 @@ export const SalesPage: React.FC = () => {
         ), [stock, debouncedSearch]);
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] animate-slide-up pb-5">
+        <div className="flex flex-col lg:flex-row gap-6 h-full animate-slide-up pb-2">
             {/* Catalog Section */}
             <div className="flex-1 flex flex-col space-y-6 overflow-hidden">
                 <div className="flex items-center gap-4 px-2">

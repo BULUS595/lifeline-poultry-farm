@@ -159,7 +159,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen relative overflow-x-hidden">
+      <div className="flex-1 flex flex-col h-screen relative overflow-hidden">
         {/* Desktop Top Nav */}
         <header className="hidden lg:flex items-center justify-between h-24 px-12 bg-background/80 backdrop-blur-xl sticky top-0 z-30 border-b border-border/50">
           <div>
@@ -256,14 +256,14 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           </div>
         </header>
 
-        <main className="flex-1 p-6 md:p-10 lg:p-12 pb-44 animate-slide-up bg-background/50">
+        <main className="flex-1 p-6 md:p-10 lg:p-12 overflow-y-auto animate-slide-up bg-background/50 custom-scrollbar">
            <div className="max-w-7xl mx-auto">
             {children}
            </div>
         </main>
 
         {/* Mobile Bottom Navigation - Redesigned for Dark Premium Look */}
-        <nav className="fixed bottom-0 left-0 right-0 z-[100] lg:hidden bg-[#050505] border-t border-white/5 pb-safe shadow-[0_-20px_50px_-15px_rgba(0,0,0,0.8)] backdrop-blur-xl">
+        <nav className="relative z-[100] lg:hidden bg-[#050505] border-t border-white/5 pb-safe shadow-[0_-20px_50px_-15px_rgba(0,0,0,0.8)] backdrop-blur-xl shrink-0">
           <div className="flex items-center justify-around h-24 px-4 overflow-hidden">
             {filteredNavItems.slice(0, 4).map((item) => {
               const isActive = location.pathname === item.path;

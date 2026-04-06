@@ -21,7 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { Skeleton } from '../components/Skeleton';
 import { supabase, supabaseDataService } from '../services/supabaseService';
 import { type StockItem } from '../types';
-import { Card, Button, Badge, Modal, Input, Label, Select } from '../components/ui';
+import { Card, Button, Modal, Input, Label, Select } from '../components/ui';
 
 type FormData = {
     name: string;
@@ -71,7 +71,7 @@ const StatusBadge = React.memo(({ status }: { status: string }) => {
 // ─── Toast ────────────────────────────────────────────────────────────────────
 const Toast = ({ message, type }: { message: string; type: 'success' | 'error' }) => (
     <div
-        className={`fixed bottom-28 left-1/2 -translate-x-1/2 z-[300] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border text-sm font-semibold transition-all animate-slide-up
+        className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[300] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border text-sm font-semibold transition-all animate-slide-up
         ${type === 'success'
             ? 'bg-emerald-600 text-white border-emerald-500'
             : 'bg-rose-600 text-white border-rose-500'}`}
@@ -293,7 +293,7 @@ export const StoragePage: React.FC = () => {
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="space-y-6 pb-28 animate-slide-up">
+        <div className="space-y-6 animate-slide-up">
             {toast && <Toast message={toast.message} type={toast.type} />}
 
             {/* ── Page Header ─────────────────────────────────────────────── */}
