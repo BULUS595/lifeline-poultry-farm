@@ -15,13 +15,15 @@ import {
     Clock,
     BadgeCheck,
     XOctagon,
+    ShieldX,
+    User,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { Skeleton } from '../components/Skeleton';
 import { supabase, supabaseDataService } from '../services/supabaseService';
 import { type StockItem } from '../types';
-import { Card, Button, Modal, Input, Label, Select } from '../components/ui';
+import { Card, Button, Modal, Input, Label, Select, Badge } from '../components/ui';
 
 type FormData = {
     name: string;
@@ -45,23 +47,23 @@ const EMPTY_FORM: FormData = {
     imageUrl: '',
 };
 
-const StatusBadge = React.memo(({ status }: { status: string }) => {
+const StatusBadge = React.memo(({ status, className = '' }: { status: string; className?: string }) => {
     switch (status) {
         case 'APPROVED':
             return (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 text-[10px] font-bold uppercase tracking-wider border border-emerald-500/20 ${className}`}>
                     <BadgeCheck size={11} /> Approved
                 </span>
             );
         case 'REJECTED':
             return (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/15 text-rose-600 text-[10px] font-bold uppercase tracking-wider border border-rose-500/20">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/15 text-rose-600 text-[10px] font-bold uppercase tracking-wider border border-rose-500/20 ${className}`}>
                     <XOctagon size={11} /> Rejected
                 </span>
             );
         default:
             return (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 text-amber-600 text-[10px] font-bold uppercase tracking-wider border border-amber-500/20">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 text-amber-600 text-[10px] font-bold uppercase tracking-wider border border-amber-500/20 ${className}`}>
                     <Clock size={11} /> Pending
                 </span>
             );
@@ -85,9 +87,6 @@ const Toast = ({ message, type }: { message: string; type: 'success' | 'error' }
 export const StoragePage: React.FC = () => {
     const { user, isInventory, isAdmin, isManager } = useAuth();
     
-    // Separation of concerns: 
-    // - Managers/Admins can see everything and approve
-    // - Inventory staff can add/submit but not approve
     const canApprove = isAdmin || isManager;
     const canAddStock = isAdmin || isInventory || isManager;
     const canManageAll = isAdmin || isManager;
@@ -121,7 +120,6 @@ export const StoragePage: React.FC = () => {
         return () => clearTimeout(t);
     }, [searchTerm]);
 
-    // Load stock items
     const loadData = useCallback(async () => {
         setIsLoading(true);
         setHasError(false);
@@ -130,8 +128,7 @@ export const StoragePage: React.FC = () => {
             if (canManageAll) {
                 setItems(data || []);
             } else {
-                // Regular staff only see their own submissions OR approved items
-                setItems((data || []).filter(i => i.submittedBy === user?.id || i.status === 'APPROVED'));
+                setItems((data || []).filter(i => i.submittedBy === (user?.id || '') || i.status === 'APPROVED'));
             }
         } catch {
             setHasError(true);
@@ -143,13 +140,12 @@ export const StoragePage: React.FC = () => {
     useEffect(() => {
         loadData();
         const channel = supabase
-            .channel('storage-page-sync-v11')
+            .channel('storage-sync-final')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items' }, loadData)
             .subscribe();
         return () => { supabase.removeChannel(channel); };
     }, [loadData]);
 
-    // Image upload
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -158,19 +154,15 @@ export const StoragePage: React.FC = () => {
             const url = await supabaseDataService.uploadStockImage(file);
             if (url) {
                 setForm(f => ({ ...f, imageUrl: url }));
-                setToast({ message: 'Image successfully uploaded and attached.', type: 'success' });
-            } else {
-                throw new Error('Image reference could not be generated.');
+                setToast({ message: 'Telemetry data acquired.', type: 'success' });
             }
         } catch (err: any) {
-            setToast({ message: `Upload failed: ${err.message || 'Check your internet connection'}`, type: 'error' });
-            console.error('User upload error:', err);
+            setToast({ message: `Upload failed: ${err.message}`, type: 'error' });
         } finally {
             setActingItem(null);
         }
     };
 
-    // Open form for new or edit
     const openNewForm = () => {
         setEditingItem(null);
         setForm(EMPTY_FORM);
@@ -194,17 +186,16 @@ export const StoragePage: React.FC = () => {
         setShowForm(true);
     };
 
-    // Submit form
     const handleSubmit = async () => {
         if (!user) return;
         setFormError('');
 
-        if (!form.name.trim()) { setFormError('Stock name is required.'); return; }
+        if (!form.name.trim()) { setFormError('Name is mandatory.'); return; }
         const qty = parseFloat(form.quantity);
         const price = parseFloat(form.unitPrice);
-        if (isNaN(qty) || qty <= 0) { setFormError('Please enter a valid quantity.'); return; }
-        if (isNaN(price) || price <= 0) { setFormError('Please enter a valid price.'); return; }
-        if (!form.imageUrl) { setFormError('A photo of the stock is required.'); return; }
+        if (isNaN(qty) || qty <= 0) { setFormError('Invalid quantity.'); return; }
+        if (isNaN(price) || price <= 0) { setFormError('Invalid price.'); return; }
+        if (!form.imageUrl) { setFormError('Visual telemetry required.'); return; }
 
         setIsSubmitting(true);
         try {
@@ -212,8 +203,8 @@ export const StoragePage: React.FC = () => {
                 name: form.name.trim(),
                 quantity: qty,
                 unitPrice: price,
-                unit: form.unit || 'units',
-                category: form.category || 'feed',
+                unit: form.unit,
+                category: form.category,
                 description: form.description.trim(),
                 minThreshold: parseFloat(form.minThreshold) || 10,
                 imageUrl: form.imageUrl,
@@ -221,29 +212,24 @@ export const StoragePage: React.FC = () => {
             };
 
             if (editingItem) {
-                await supabaseDataService.updateStockItem(
-                    editingItem.id,
-                    payload,
-                    { id: user.id, name: user.name, role: user.role }
-                );
-                setToast({ message: 'Stock item updated successfully.', type: 'success' });
+                await supabaseDataService.updateStockItem(editingItem.id, payload, { id: user.id, name: user.name, role: user.role });
+                setToast({ message: 'Core asset updated.', type: 'success' });
             } else {
                 await supabaseDataService.submitStockItem(payload, user.id, user.name, user.role);
-                setToast({ message: 'Stock sent to admin for approval.', type: 'success' });
+                setToast({ message: 'Submission queued for approval.', type: 'success' });
             }
             setShowForm(false);
             loadData();
         } catch {
-            setFormError('Something went wrong. Please try again.');
+            setFormError('Structural error encountered.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    // Delete
     const handleDelete = async (item: StockItem) => {
         if (!user) return;
-        if (!confirm(`Are you sure you want to delete "${item.name}"?`)) return;
+        if (!confirm(`Confirm permanent removal of "${item.name}"?`)) return;
         setActingItem(item.id);
         try {
             const ok = await supabaseDataService.deleteStockItem(item.id, { id: user.id, name: user.name, role: user.role });
@@ -253,7 +239,6 @@ export const StoragePage: React.FC = () => {
         }
     };
 
-    // Admin actions
     const handleApprove = async (item: StockItem) => {
         if (!user || !canApprove) return;
         setActingItem(item.id);
@@ -261,7 +246,7 @@ export const StoragePage: React.FC = () => {
             const ok = await supabaseDataService.approveStockItem(item.id, { id: user.id, name: user.name, role: user.role });
             if (ok) {
                 setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'APPROVED' } : i));
-                setToast({ message: `"${item.name}" has been approved.`, type: 'success' });
+                setToast({ message: 'Asset verified and live.', type: 'success' });
             }
         } finally {
             setActingItem(null);
@@ -270,408 +255,346 @@ export const StoragePage: React.FC = () => {
 
     const handleReject = async (item: StockItem) => {
         if (!user || !canApprove) return;
-        const comment = prompt('Reason for rejection (optional):');
+        const comment = prompt('Provide rejection reasoning:');
         if (comment === null) return;
         setActingItem(item.id);
         try {
             const ok = await supabaseDataService.rejectStockItem(item.id, comment, { id: user.id, name: user.name, role: user.role });
             if (ok) {
-                setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'REJECTED', rejectionComment: comment } : i));
-                setToast({ message: `"${item.name}" has been rejected.`, type: 'error' });
+                setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'REJECTED' } : i));
+                setToast({ message: 'Asset entry denied.', type: 'error' });
             }
         } finally {
             setActingItem(null);
         }
     };
 
-    const filtered = useMemo(() => items.filter(i => {
+    const filteredItems = useMemo(() => items.filter(i => {
         const matchSearch = i.name.toLowerCase().includes(debouncedSearch.toLowerCase());
         const matchStatus = filterStatus === 'all' || i.status === filterStatus;
         return matchSearch && matchStatus;
     }), [items, debouncedSearch, filterStatus]);
 
-    // ── Loading skeleton ──────────────────────────────────────────────────────
     if (isLoading && items.length === 0) {
         return (
-            <div className="space-y-6 animate-pulse">
-                <Skeleton height={80} borderRadius={16} />
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} height={280} borderRadius={20} />)}
+            <div className="space-y-12 animate-pulse p-10">
+                <Skeleton height={120} borderRadius={32} />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <Skeleton key={i} height={400} borderRadius={40} />)}
                 </div>
             </div>
         );
     }
 
-    // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="space-y-6 animate-slide-up">
+        <div className="space-y-12 animate-slide-up pb-20">
             {toast && <Toast message={toast.message} type={toast.type} />}
 
-            {/* ── Page Header ─────────────────────────────────────────────── */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Header */}
+            <div className="flex flex-col lg:flex-row gap-8 justify-between items-start lg:items-end px-2">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Farm Inventory</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">Manage and submit stock items for approval</p>
+                   <div className="flex items-center gap-4 mb-4">
+                       <div className="p-4 bg-primary/10 text-primary rounded-3xl shadow-glow">
+                           <Database size={32} strokeWidth={2.5} />
+                       </div>
+                       <div>
+                           <h1 className="text-5xl font-black tracking-tighter uppercase leading-none">
+                             Inventory <span className="text-primary italic">HUB</span>
+                           </h1>
+                           <p className="text-muted-foreground font-bold text-[10px] uppercase tracking-[0.3em] mt-2 opacity-50 italic">Secure Warehouse Control Terminal</p>
+                       </div>
+                   </div>
                 </div>
 
-                {/* Only inventory staff and admins can see this button */}
-                {canAddStock && (
-                    <Button
-                        variant="primary"
-                        className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-black italic shadow-lg shadow-primary/20 transition-all hover:brightness-110 active:scale-95"
-                        onClick={openNewForm}
-                        leftIcon={Plus}
-                    >
-                        Add Stock
-                    </Button>
-                )}
-            </div>
-
-            {/* ── Filters ─────────────────────────────────────────────────── */}
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between bg-card border border-border/50 rounded-2xl p-4">
-                <div className="flex gap-1.5 flex-wrap">
-                    {[
-                        { key: 'all', label: 'All' },
-                        { key: 'PENDING_APPROVAL', label: 'Pending' },
-                        { key: 'APPROVED', label: 'Approved' },
-                        { key: 'REJECTED', label: 'Rejected' },
-                    ].map(({ key, label }) => (
-                        <button
-                            key={key}
-                            onClick={() => setFilterStatus(key)}
-                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                                filterStatus === key
-                                    ? 'bg-primary text-white shadow-sm'
-                                    : 'text-muted-foreground hover:bg-muted/60'
-                            }`}
-                        >
-                            {label}
-                            <span className={`ml-1.5 text-[10px] ${filterStatus === key ? 'opacity-70' : 'opacity-40'}`}>
-                                ({items.filter(i => key === 'all' ? true : i.status === key).length})
-                            </span>
-                        </button>
-                    ))}
-                </div>
-
-                <div className="relative w-full sm:w-60">
-                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                        type="text"
-                        placeholder="Search stock..."
-                        className="w-full pl-9 pr-4 h-9 rounded-xl border border-border/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                    />
-                </div>
-            </div>
-
-            {/* ── Grid ────────────────────────────────────────────────────── */}
-            {hasError ? (
-                <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border-2 border-dashed border-rose-300/40 bg-rose-500/5">
-                    <XCircle size={48} className="text-rose-400 mb-3" />
-                    <p className="text-sm font-semibold text-rose-600">Failed to load inventory</p>
-                    <button onClick={loadData} className="mt-3 text-xs underline text-rose-400">Retry</button>
-                </div>
-            ) : filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border-2 border-dashed border-border/40">
-                    <Database size={48} className="text-muted-foreground/30 mb-3" />
-                    <p className="text-sm font-semibold text-muted-foreground">No stock items found</p>
+                <div className="flex items-center gap-6 w-full lg:w-auto">
+                    <div className="relative flex-1 lg:w-[400px] group">
+                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={20} />
+                        <input
+                            placeholder="OPERATIONAL SEARCH..."
+                            className="w-full pl-14 h-16 rounded-[28px] bg-card/60 border-2 border-border/40 backdrop-blur-3xl shadow-inner transition-all focus:border-primary/40 text-[11px] font-black uppercase tracking-widest focus:outline-none"
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                        />
+                    </div>
                     {canAddStock && (
-                        <button onClick={openNewForm} className="mt-3 text-xs text-primary underline">
-                            Add your first item
-                        </button>
+                        <Button
+                            variant="primary"
+                            className="h-16 px-10 rounded-[28px] text-[11px] font-black uppercase tracking-widest shadow-glow-primary hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0"
+                            onClick={openNewForm}
+                            leftIcon={Plus}
+                        >
+                            Log Stock
+                        </Button>
                     )}
                 </div>
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-4 px-2">
+                {[
+                    { key: 'all', label: 'All Assets' },
+                    { key: 'PENDING_APPROVAL', label: 'Queued' },
+                    { key: 'APPROVED', label: 'Market-Ready' },
+                    { key: 'REJECTED', label: 'Flagged' },
+                ].map(({ key, label }) => (
+                    <button
+                        key={key}
+                        onClick={() => setFilterStatus(key)}
+                        className={`
+                            px-8 py-4 rounded-[22px] text-[11px] font-black uppercase tracking-widest border-2 transition-all flex items-center gap-4 hover:scale-105
+                            ${filterStatus === key 
+                                ? 'bg-slate-900 border-slate-900 text-white shadow-2xl scale-110' 
+                                : 'bg-card/40 border-border/40 text-muted-foreground hover:bg-card/80 hover:border-border/60'}
+                        `}
+                    >
+                        {label}
+                        <span className={`px-2.5 py-1 rounded-lg text-[10px] ${filterStatus === key ? 'bg-primary text-white shadow-glow' : 'bg-muted text-muted-foreground opacity-30'}`}>
+                            {items.filter(i => key === 'all' ? true : i.status === key).length}
+                        </span>
+                    </button>
+                ))}
+            </div>
+
+            {/* Content Segment */}
+            {hasError ? (
+                <div className="flex flex-col items-center justify-center py-40 text-center rounded-[56px] border-4 border-dashed border-rose-500/10 bg-rose-500/5 px-10">
+                    <XCircle size={80} className="text-rose-500 mb-8 stroke-1" />
+                    <h3 className="text-3xl font-black uppercase tracking-tighter text-rose-600 mb-4 italic">Protocol Error 404</h3>
+                    <p className="text-[12px] font-bold uppercase tracking-[0.3em] text-rose-500 opacity-60">Synchronisation link severed</p>
+                    <button onClick={loadData} className="mt-10 px-12 py-5 bg-rose-500 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-glow-rose active:scale-95 transition-all">Attempt Relink</button>
+                </div>
+            ) : filteredItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-40 text-center rounded-[56px] border-4 border-dashed border-border/20 px-10">
+                    <Database size={80} className="text-muted-foreground/10 mb-8 stroke-1" />
+                    <h3 className="text-3xl font-black uppercase tracking-tighter text-muted-foreground mb-4 italic">Segment Empty</h3>
+                    <p className="text-[12px] font-bold uppercase tracking-[0.3em] text-muted-foreground opacity-30 italic">No assets detected in sector</p>
+                </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {filtered.map(item => (
-                        <Card
-                            key={item.id}
-                            className="group flex flex-col overflow-hidden rounded-2xl border border-border/50 bg-card hover:shadow-md transition-all hover:border-primary/30 p-0"
-                            noPadding
-                        >
-                            {/* Image */}
-                            <div className="relative aspect-video bg-muted overflow-hidden">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-12">
+                    {filteredItems.map(item => (
+                        <div key={item.id} className="group relative bg-card/60 backdrop-blur-3xl rounded-[48px] border-2 border-border/20 transition-all duration-700 hover:shadow-glow hover:border-primary/30 hover:-translate-y-3 overflow-hidden flex flex-col h-full">
+                            <div className={`absolute top-0 left-0 w-2.5 h-full transition-transform group-hover:scale-y-110 duration-1000 ${
+                                item.status === 'APPROVED' ? 'bg-emerald-500 shadow-glow-success' : 
+                                item.status === 'PENDING_APPROVAL' ? 'bg-primary shadow-glow' : 
+                                item.status === 'REJECTED' ? 'bg-rose-500 shadow-glow-rose' : 'bg-slate-400'
+                            }`} />
+
+                            <div className="relative aspect-square bg-slate-950 overflow-hidden border-b-2 border-border/10 shrink-0">
                                 {item.imageUrl
-                                    ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                                    : <div className="w-full h-full flex items-center justify-center"><Package size={40} className="text-muted-foreground/20" /></div>
+                                    ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000 opacity-80 group-hover:opacity-100" />
+                                    : <div className="w-full h-full flex items-center justify-center text-primary/10 transition-transform group-hover:scale-110"><Package size={80} strokeWidth={1} /></div>
                                 }
-                                <div className="absolute top-3 left-3">
-                                    <StatusBadge status={item.status} />
+                                
+                                <div className="absolute top-6 left-6">
+                                     <StatusBadge status={item.status} className="shadow-2xl backdrop-blur-md bg-black/40 border-white/5" />
                                 </div>
+
                                 {item.quantity <= item.minThreshold && (
-                                    <div className="absolute top-3 right-3">
-                                        <span className="px-2 py-1 rounded-full bg-rose-500 text-white text-[10px] font-bold">Low Stock</span>
+                                    <div className="absolute top-6 right-6">
+                                        <Badge variant="danger" className="text-[10px] font-black px-5 py-2.5 rounded-full shadow-glow-rose animate-pulse italic">Supply Warning</Badge>
                                     </div>
                                 )}
 
-                                 {/* Admin hover overlay - ONLY for those with approval permission */}
                                 {canApprove && item.status === 'PENDING_APPROVAL' && (
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-3">
-                                        <button
+                                    <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl opacity-0 group-hover:opacity-100 transition-all duration-500 flex flex-col items-center justify-center p-10 gap-6 translate-y-12 group-hover:translate-y-0">
+                                         <button
                                             onClick={() => handleApprove(item)}
                                             disabled={!!actingItem}
-                                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition-colors shadow-lg"
-                                        >
-                                            <CheckCircle2 size={14} /> Approve
-                                        </button>
-                                        <button
+                                            className="w-full h-16 bg-emerald-500 text-white rounded-3xl font-black uppercase text-[11px] tracking-widest shadow-glow-success flex items-center justify-center gap-4 hover:scale-105 active:scale-95 transition-all"
+                                         >
+                                            <CheckCircle2 size={24} strokeWidth={3} /> Verify and Launch
+                                         </button>
+                                         <button
                                             onClick={() => handleReject(item)}
                                             disabled={!!actingItem}
-                                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-500 text-white text-xs font-bold hover:bg-rose-600 transition-colors shadow-lg"
-                                        >
-                                            <XOctagon size={14} /> Reject
-                                        </button>
+                                            className="w-full h-16 bg-rose-500 text-white rounded-3xl font-black uppercase text-[11px] tracking-widest shadow-glow-rose flex items-center justify-center gap-4 hover:scale-105 active:scale-95 transition-all"
+                                         >
+                                            <ShieldX size={24} strokeWidth={3} /> Void Entry
+                                         </button>
                                     </div>
                                 )}
                             </div>
 
-                            {/* Card body */}
-                            <div className="p-4 flex-1 flex flex-col">
-                                <div className="flex justify-between items-start mb-3">
-                                    <h3 className="font-semibold text-base truncate">{item.name}</h3>
-                                    <span className="text-primary font-bold text-base ml-2 shrink-0">₦{item.unitPrice.toLocaleString()}</span>
-                                </div>
-
-                                <div className="flex items-center justify-between text-sm text-muted-foreground bg-muted/30 rounded-xl px-3 py-2 mb-3">
-                                    <span>Stock</span>
-                                    <span className="font-semibold text-foreground">{item.quantity} <span className="text-xs opacity-50">{item.unit}</span></span>
-                                </div>
-
-                                {item.status === 'REJECTED' && item.rejectionComment && (
-                                    <div className="flex items-start gap-2 bg-rose-50 dark:bg-rose-500/10 rounded-xl p-3 mb-3 text-rose-600 text-xs">
-                                        <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-                                        <span className="italic">{item.rejectionComment}</span>
+                            <div className="p-10 flex-1 flex flex-col">
+                                <div className="w-full mb-8">
+                                    <h4 className="font-black text-3xl uppercase tracking-tighter truncate text-foreground leading-tight mb-3 group-hover:text-primary transition-colors italic">{item.name}</h4>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-primary/40 shadow-glow" />
+                                        <p className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em] opacity-40 italic">{item.category || 'Standard segment'}</p>
                                     </div>
-                                )}
+                                </div>
 
-                                {/* Actions */}
-                                <div className="flex items-center justify-between mt-auto pt-3 border-t border-border/30">
-                                    <span className="text-[11px] text-muted-foreground/50">
-                                        {new Date(item.lastUpdated).toLocaleDateString()}
-                                    </span>
-                                    <div className="flex gap-2">
+                                <div className="w-full grid grid-cols-2 gap-10 py-10 border-y-2 border-border/10 mb-8">
+                                    <div className="flex flex-col gap-2">
+                                        <p className="text-[10px] font-black text-muted-foreground uppercase opacity-30 tracking-[0.15em] italic leading-none">Net Reserve</p>
+                                        <div className="flex items-end gap-2 text-foreground">
+                                            <span className="font-black text-4xl tabular-nums tracking-tighter leading-none">{item.quantity}</span>
+                                            <span className="text-[11px] font-black text-muted-foreground opacity-40 uppercase tracking-widest leading-none pb-1">{item.unit}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <p className="text-[10px] font-black text-muted-foreground uppercase opacity-30 tracking-[0.15em] italic leading-none text-right">Unit Value</p>
+                                        <span className="font-black text-4xl tabular-nums tracking-tighter text-primary leading-none">₦{item.unitPrice.toLocaleString()}</span>
+                                    </div>
+                                </div>
+
+                                <div className="w-full flex items-center justify-between mt-auto pt-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-2xl bg-muted/40 flex items-center justify-center border-2 border-border/10 group-hover:border-primary/20 group-hover:bg-primary/5 transition-all">
+                                            <User size={20} className="text-muted-foreground group-hover:text-primary transition-colors" />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-black text-muted-foreground uppercase opacity-20 tracking-widest leading-none mb-1.5">Handler ID</span>
+                                            <p className="text-[12px] font-black text-foreground uppercase tracking-tighter leading-none">{item.submittedByName || 'SYSTEM'}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-3">
                                         <button
                                             onClick={() => openEditForm(item)}
-                                            disabled={
-                                                !!actingItem ||
-                                                (!canManageAll && item.status === 'PENDING_APPROVAL') ||
-                                                (!canManageAll && item.status === 'APPROVED')
-                                            }
-                                            className="p-2 rounded-lg border border-border/40 hover:text-primary hover:border-primary/40 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                            disabled={!!actingItem || (!canManageAll && (item.status === 'PENDING_APPROVAL' || item.status === 'APPROVED'))}
+                                            className="w-14 h-14 bg-card hover:bg-primary/5 hover:text-primary hover:border-primary/40 rounded-2xl border-2 border-border/40 shadow-sm transition-all active:scale-90 flex items-center justify-center opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0"
+                                            title="Override Core"
                                         >
-                                            <Edit3 size={14} />
+                                            <Edit3 size={20} />
                                         </button>
                                         <button
                                             onClick={() => handleDelete(item)}
-                                            disabled={
-                                                !!actingItem ||
-                                                (!canManageAll && item.status === 'PENDING_APPROVAL') ||
-                                                (!canManageAll && item.status === 'APPROVED')
-                                            }
-                                            className="p-2 rounded-lg border border-border/40 hover:text-rose-500 hover:border-rose-400/40 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                            disabled={!!actingItem || (!canManageAll && (item.status === 'PENDING_APPROVAL' || item.status === 'APPROVED'))}
+                                            className="w-14 h-14 bg-card hover:bg-rose-500/5 hover:text-rose-500 hover:border-rose-400/40 rounded-2xl border-2 border-border/40 shadow-sm transition-all active:scale-90 flex items-center justify-center opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 delay-100"
+                                            title="Terminate Asset"
                                         >
-                                            <Trash2 size={14} />
+                                            <Trash2 size={20} />
                                         </button>
                                     </div>
                                 </div>
                             </div>
-                        </Card>
+                        </div>
                     ))}
                 </div>
             )}
 
-            {/* ── Add / Edit Stock Modal ───────────────────────────────────── */}
+            {/* Modal Terminal */}
             <Modal
                 isOpen={showForm}
                 onClose={() => setShowForm(false)}
-                title={editingItem ? 'Edit Stock Item' : 'Add New Stock'}
+                title={editingItem ? 'ASSET CORE OVERRIDE' : 'NEW SEGMENT LOG'}
                 maxWidth="lg"
             >
-                <div className="py-2 space-y-5">
-                    {/* Error */}
+                <div className="space-y-10 py-6">
                     {formError && (
-                        <div className="flex items-center gap-2 p-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl text-rose-600 text-sm">
-                            <AlertCircle size={16} className="shrink-0" />
+                        <div className="flex items-center gap-4 p-6 bg-rose-500/10 border-2 border-rose-500/20 rounded-[32px] text-rose-500 text-[12px] font-black uppercase tracking-widest italic animate-shake">
+                            <AlertCircle size={24} className="shrink-0" />
                             {formError}
                         </div>
                     )}
 
-                    {/* Stock Name */}
-                    <div className="space-y-1.5">
-                        <Label htmlFor="item-name" className="text-sm font-medium text-foreground">
-                            Stock Name <span className="text-rose-500">*</span>
-                        </Label>
-                        <Input
-                            id="item-name"
-                            type="text"
-                            placeholder="e.g. Broiler Starter Feed 50kg"
-                            className="h-11 rounded-xl border-border/40 bg-background/50 hover:border-primary/40 focus:border-primary transition-all font-black"
-                            value={form.name}
-                            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                        />
-                    </div>
-
-                    {/* Category & Description */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="item-category">Category <span className="text-rose-500">*</span></Label>
-                            <Select
-                                id="item-category"
-                                className="h-11 rounded-xl border-border/40 bg-background/50"
-                                value={form.category}
-                                onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                            >
-                                <option value="feed">Feed</option>
-                                <option value="medicine">Medicine</option>
-                                <option value="birds">Birds</option>
-                                <option value="equipment">Equipment</option>
-                                <option value="eggs">Eggs</option>
-                                <option value="other">Other</option>
-                            </Select>
-                        </div>
-                        <div className="space-y-1.5 flex flex-col">
-                            <Label htmlFor="item-desc">Description</Label>
-                            <input
-                                id="item-desc"
-                                className="input-modern h-11 rounded-xl border-border/40 bg-background/50 hover:border-primary/40 focus:border-primary transition-all font-black placeholder:opacity-30 italic px-4"
-                                placeholder="Short description..."
-                                value={form.description}
-                                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Quantity + Unit */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="item-qty" className="text-sm font-medium text-foreground">
-                                Quantity <span className="text-rose-500">*</span>
-                            </Label>
+                    <div className="grid grid-cols-1 gap-8">
+                        <div className="space-y-4">
+                            <Label>Nominal Designation</Label>
                             <Input
-                                id="item-qty"
-                                type="number"
-                                placeholder="0"
-                                className="h-11 rounded-xl border-border/60 bg-background"
-                                value={form.quantity}
-                                onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
+                                placeholder="E.G. BIRD FEED GRADE-A"
+                                className="h-18 px-8 rounded-[28px] text-lg uppercase"
+                                value={form.name}
+                                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                             />
                         </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="item-unit" className="text-sm font-medium text-foreground">Unit</Label>
-                            <Select
-                                id="item-unit"
-                                className="h-11 rounded-xl border-border/60 bg-background"
-                                value={form.unit}
-                                onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
-                            >
-                                {['units', 'kg', 'bags', 'litres', 'crates', 'birds', 'grams'].map(u => (
-                                    <option key={u} value={u}>{u.charAt(0).toUpperCase() + u.slice(1)}</option>
-                                ))}
-                            </Select>
-                        </div>
-                    </div>
 
-                    {/* Price + Min Threshold */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="item-price" className="text-sm font-medium text-foreground">
-                                Price per Unit (₦) <span className="text-rose-500">*</span>
-                            </Label>
-                            <Input
-                                id="item-price"
-                                type="number"
-                                placeholder="0.00"
-                                className="h-11 rounded-xl border-border/60 bg-background"
-                                value={form.unitPrice}
-                                onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))}
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="item-threshold" className="text-sm font-medium text-foreground">
-                                Low Stock Alert
-                            </Label>
-                            <Input
-                                id="item-threshold"
-                                type="number"
-                                placeholder="10"
-                                className="h-11 rounded-xl border-border/60 bg-background"
-                                value={form.minThreshold}
-                                onChange={e => setForm(f => ({ ...f, minThreshold: e.target.value }))}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Image upload */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-medium text-foreground">
-                            Stock Photo <span className="text-rose-500">*</span>
-                        </Label>
-
-                        {form.imageUrl ? (
-                            <div className="relative rounded-2xl overflow-hidden border border-border/50 h-40">
-                                <img src={form.imageUrl} className="w-full h-full object-cover" alt="Stock" />
-                                <button
-                                    onClick={() => setForm(f => ({ ...f, imageUrl: '' }))}
-                                    className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors"
+                        <div className="grid grid-cols-2 gap-8">
+                            <div className="space-y-4 text-left">
+                                <Label>Sector</Label>
+                                <Select
+                                    className="h-18 px-8 rounded-[28px] uppercase"
+                                    value={form.category}
+                                    onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
                                 >
-                                    <Trash2 size={14} />
-                                </button>
-                                <div className="absolute bottom-2 left-2 flex items-center gap-1.5 bg-emerald-500 text-white text-[10px] font-semibold px-2 py-1 rounded-lg">
-                                    <CheckCircle2 size={11} /> Photo attached
-                                </div>
+                                    <option value="feed">Nutrients</option>
+                                    <option value="medicine">Bioscience</option>
+                                    <option value="birds">Livestock</option>
+                                    <option value="equipment">Asset</option>
+                                    <option value="eggs">Yield</option>
+                                    <option value="other">Misc</option>
+                                </Select>
                             </div>
-                        ) : (
-                            <label className={`flex flex-col items-center justify-center gap-2 h-36 rounded-2xl border-2 border-dashed cursor-pointer transition-all
-                                ${actingItem === 'uploading'
-                                    ? 'border-primary/40 bg-primary/5'
-                                    : 'border-border/40 hover:border-primary/40 hover:bg-primary/5'}`}
-                            >
-                                {actingItem === 'uploading' ? (
-                                    <>
-                                        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                                        <span className="text-xs text-primary font-medium">Uploading...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Upload size={24} className="text-muted-foreground" />
-                                        <span className="text-sm text-muted-foreground font-medium">Click to upload a photo</span>
-                                        <span className="text-xs text-muted-foreground/60">JPG, PNG up to 10MB</span>
-                                    </>
-                                )}
-                                <input
-                                    type="file"
-                                    className="hidden"
-                                    accept="image/*"
-                                    onChange={handleImageUpload}
-                                    disabled={actingItem === 'uploading'}
+                            <div className="space-y-4 text-left">
+                                <Label>Metric</Label>
+                                <Select
+                                    className="h-18 px-8 rounded-[28px] uppercase"
+                                    value={form.unit}
+                                    onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
+                                >
+                                    {['units', 'kg', 'bags', 'litres', 'crates', 'birds', 'grams'].map(u => (
+                                        <option key={u} value={u}>{u.toUpperCase()}</option>
+                                    ))}
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-8">
+                            <div className="space-y-4 text-left">
+                                <Label>Reserve Qty</Label>
+                                <Input
+                                    type="number"
+                                    className="h-18 px-8 rounded-[28px] text-3xl tabular-nums"
+                                    value={form.quantity}
+                                    onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
                                 />
-                            </label>
-                        )}
+                            </div>
+                            <div className="space-y-4 text-left">
+                                <Label>Valuation (₦)</Label>
+                                <Input
+                                    type="number"
+                                    className="h-18 px-8 rounded-[28px] text-3xl tabular-nums text-primary"
+                                    value={form.unitPrice}
+                                    onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                           <Label>Visual Data Capture</Label>
+                           {form.imageUrl ? (
+                               <div className="relative h-60 rounded-[40px] overflow-hidden border-4 border-card shadow-2xl group cursor-pointer" onClick={() => setForm(f => ({ ...f, imageUrl: '' }))}>
+                                   <img src={form.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="" />
+                                   <div className="absolute inset-0 bg-rose-600/60 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                                        <Trash2 size={40} className="text-white" />
+                                   </div>
+                               </div>
+                           ) : (
+                               <label className="flex flex-col items-center justify-center h-60 rounded-[40px] border-4 border-dashed border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer group">
+                                   {actingItem === 'uploading' ? (
+                                       <div className="flex flex-col items-center gap-4">
+                                            <div className="w-16 h-16 border-8 border-primary border-t-transparent rounded-full animate-spin" />
+                                            <span className="text-[11px] font-black uppercase tracking-[0.3em] text-primary">Uploading...</span>
+                                       </div>
+                                   ) : (
+                                       <>
+                                           <Upload size={48} className="text-muted-foreground group-hover:text-primary transition-colors mb-4" />
+                                           <span className="text-sm font-black uppercase tracking-tight">Acquire Telemetry Image</span>
+                                           <span className="text-[10px] font-black uppercase tracking-widest opacity-20 mt-2 italic">Capture or select digital asset</span>
+                                       </>
+                                   )}
+                                   <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                               </label>
+                           )}
+                        </div>
                     </div>
 
-                    {/* Action buttons */}
-                    <div className="flex gap-3 pt-2">
-                        <button
+                    <div className="flex gap-6 pt-6">
+                        <Button
+                            variant="outline"
+                            className="flex-1 h-20 rounded-[32px] text-sm uppercase tracking-widest border-4"
                             onClick={() => setShowForm(false)}
-                            className="flex-1 h-11 rounded-xl border border-border/60 text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
                         >
-                            Cancel
-                        </button>
-                        <button
+                            Abort
+                        </Button>
+                        <Button
+                            className="flex-2 h-20 rounded-[32px] text-sm uppercase tracking-widest shadow-glow"
                             onClick={handleSubmit}
-                            disabled={isSubmitting}
-                            className="flex-1 h-11 rounded-xl bg-primary text-white text-sm font-semibold flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                            isLoading={isSubmitting}
                         >
-                            {isSubmitting ? (
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                                <>
-                                    <Send size={15} />
-                                    {editingItem ? 'Save Changes' : 'Send to Admin'}
-                                </>
-                            )}
-                        </button>
+                            {editingItem ? 'Execute Update' : 'Finalise Submission'} <Send className="ml-3" size={20} />
+                        </Button>
                     </div>
                 </div>
             </Modal>
