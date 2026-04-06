@@ -256,7 +256,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           </div>
         </header>
 
-        <main className="flex-1 p-6 md:p-10 lg:p-12 overflow-y-auto animate-slide-up bg-background/50 custom-scrollbar">
+        <main className="flex-1 p-6 md:p-10 lg:p-12 pb-32 lg:pb-12 overflow-y-auto animate-slide-up bg-background/50 custom-scrollbar">
            <div className="max-w-7xl mx-auto">
             {children}
            </div>

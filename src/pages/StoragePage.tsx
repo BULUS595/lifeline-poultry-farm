@@ -237,7 +237,7 @@ export const StoragePage: React.FC = () => {
                                     <p className="text-xl font-black italic">{item.quantity} <span className="text-[10px] uppercase opacity-40">{item.unit}</span></p>
                                 </div>
                                 <div className="flex-shrink-0 flex items-center gap-4 pr-2">
-                                    <button className="p-3 bg-muted/10 hover:bg-primary/20 hover:text-primary rounded-2xl transition-all" onClick={() => { setEditingItem(item); setForm({ name: item.name, quantity: String(item.quantity), unitPrice: String(item.unitPrice), unit: item.unit, category: item.category, description: item.description, imageUrl: item.imageUrl }); setShowForm(true); }}><Edit2 size={18} /></button>
+                                    <button className="p-3 bg-muted/10 hover:bg-primary/20 hover:text-primary rounded-2xl transition-all" onClick={() => { setEditingItem(item); setForm({ name: item.name, quantity: String(item.quantity), unitPrice: String(item.unitPrice), unit: item.unit || '', category: item.category || '', description: item.description || '', imageUrl: item.imageUrl || '' }); setShowForm(true); }}><Edit2 size={18} /></button>
                                     <button className="p-3 bg-muted/10 hover:bg-rose-500/20 hover:text-rose-500 rounded-2xl transition-all"><Trash2 size={18} /></button>
                                 </div>
                             </div>
