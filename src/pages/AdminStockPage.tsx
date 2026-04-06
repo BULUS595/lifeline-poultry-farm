@@ -4,7 +4,7 @@ import {
     CheckCircle2, Package, Search, AlertTriangle,
     Trash2, RefreshCw, X, ShieldCheck, Edit3,
     ShoppingBag, TrendingUp, Clock, ShieldX,
-    ArrowUpRight
+    ArrowUpRight, Upload
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Skeleton } from '../components/Skeleton';
@@ -34,6 +34,9 @@ export const AdminStockPage: React.FC = () => {
     const [rejectItem, setRejectItem] = useState<StockItem | null>(null);
     const [rejectNote, setRejectNote] = useState('');
 
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadPhase, setUploadPhase] = useState<string | null>(null);
+
     const loadStock = useCallback(async () => {
         setIsLoading(true);
         try {
@@ -56,13 +59,60 @@ export const AdminStockPage: React.FC = () => {
 
     useEffect(() => {
         loadStock();
-        const ch = supabase.channel('admin-stock-v4').on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items' }, loadStock).subscribe();
+        const ch = supabase.channel('admin-stock-sync').on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items' }, loadStock).subscribe();
         return () => { supabase.removeChannel(ch); };
     }, [loadStock]);
 
     useEffect(() => {
         if (tab === 'SALES_HISTORY') loadSales();
     }, [tab, loadSales]);
+
+    const compressImage = (file: File): Promise<Blob> => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target?.result as string;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    const MAX_SIZE = 1200;
+                    if (width > height) {
+                        if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                    } else {
+                        if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => { if (blob) resolve(blob); }, 'image/jpeg', 0.8);
+                };
+            };
+        });
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !editItem) return;
+        setUploadPhase('Compressing...');
+        setUploadProgress(20);
+        try {
+            const compressedBlob = await compressImage(file);
+            const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+            setUploadPhase('Uploading...');
+            setUploadProgress(50);
+            const timer = setInterval(() => { setUploadProgress(p => p < 95 ? p + 2 : p); }, 200);
+            const url = await supabaseDataService.uploadStockImage(compressedFile);
+            clearInterval(timer);
+            setUploadProgress(100);
+            if (url) setEditItem({ ...editItem, imageUrl: url });
+        } finally {
+            setTimeout(() => { setUploadPhase(null); setUploadProgress(0); }, 800);
+        }
+    };
 
     const filtered = useMemo(() =>
         items.filter(i => (i.status === tab) && i.name.toLowerCase().includes(search.toLowerCase())), [items, tab, search]);
@@ -87,7 +137,7 @@ export const AdminStockPage: React.FC = () => {
       <div className="h-[60vh] flex flex-col items-center justify-center animate-slide-up px-6 text-center">
          <ShieldCheck size={64} className="text-rose-500 mb-6 opacity-20" />
          <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Access Restricted</h2>
-         <p className="text-muted-foreground font-bold text-[10px] uppercase tracking-widest opacity-60">Admin access is required to view this section.</p>
+         <p className="text-muted-foreground font-bold text-[10px] uppercase tracking-widest opacity-60">Admin access is required to view Governance Hub.</p>
          <Button variant="secondary" className="mt-8 rounded-xl px-10 h-14 font-bold uppercase tracking-widest text-[10px]" onClick={() => window.history.back()}>Go Back</Button>
       </div>
     );
@@ -117,10 +167,10 @@ export const AdminStockPage: React.FC = () => {
         const newQty = parseFloat(editQty);
         const newStatus = (editItem.status === 'OUT_OF_STOCK' && newQty > 0) ? 'APPROVED' : editItem.status;
         const ok = await supabaseDataService.updateStockItem(editItem.id, {
-            name: editName, quantity: newQty, unitPrice: parseFloat(editPrice),
+            name: editName, quantity: newQty, unitPrice: parseFloat(editPrice), imageUrl: editItem.imageUrl
         }, { id: user.id, name: user.name, role: user.role });
         if (ok) {
-            setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, name: editName, quantity: newQty, unitPrice: parseFloat(editPrice), status: newStatus } : i));
+            setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, name: editName, quantity: newQty, unitPrice: parseFloat(editPrice), imageUrl: editItem.imageUrl, status: newStatus } : i));
             setEditItem(null);
         }
         setActing(null);
@@ -146,7 +196,7 @@ export const AdminStockPage: React.FC = () => {
                            <h1 className="text-4xl font-black tracking-tighter uppercase leading-none">
                              Governance <span className="text-primary italic">HUB</span>
                            </h1>
-                           <p className="text-muted-foreground font-bold text-[9px] uppercase tracking-widest mt-1.5 opacity-50 italic">Stock Approval & Quality Control</p>
+                           <p className="text-muted-foreground font-bold text-[9px] uppercase tracking-widest mt-1.5 opacity-50 italic">Central Approval Terminal</p>
                        </div>
                    </div>
                 </div>
@@ -168,18 +218,17 @@ export const AdminStockPage: React.FC = () => {
                 </div>
             )}
 
-            {/* Navigation Tabs */}
-            <div className="flex items-center gap-3 overflow-x-auto pb-2 px-2 scroll-smooth no-scrollbar">
+            <div className="flex items-center gap-3 overflow-x-auto pb-2 px-2 no-scrollbar">
                 {[
                     { id: 'PENDING_APPROVAL', label: 'Pending', count: counts.PENDING_APPROVAL },
-                    { id: 'APPROVED', label: 'In Stock', count: counts.APPROVED },
+                    { id: 'APPROVED', label: 'Approved', count: counts.APPROVED },
                     { id: 'OUT_OF_STOCK', label: 'Sold Out', count: counts.OUT_OF_STOCK },
                     { id: 'REJECTED', label: 'Rejected', count: counts.REJECTED },
                     { id: 'SALES_HISTORY', label: 'Sales History', count: sales.length },
                 ].map((t) => (
                     <button key={t.id} onClick={() => setTab(t.id as Tab)} className={`
                         flex items-center gap-3 px-6 py-4 rounded-2xl whitespace-nowrap transition-all font-bold text-[10px] uppercase tracking-widest border
-                        ${tab === t.id ? 'bg-primary text-white border-primary shadow-lg' : 'bg-card border-border/40 hover:border-primary/20'}
+                        ${tab === t.id ? 'bg-primary text-white border-primary shadow-lg scale-105' : 'bg-card border-border/40 hover:border-primary/20'}
                     `}>
                         {t.label} 
                         {t.count > 0 && <span className={`px-2 py-0.5 rounded-lg text-[9px] ${tab === t.id ? 'bg-white/20' : 'bg-muted/10'}`}>{t.count}</span>}
@@ -190,34 +239,34 @@ export const AdminStockPage: React.FC = () => {
             <div className="min-h-[500px]">
                 {tab === 'SALES_HISTORY' ? (
                     <div className="space-y-8 animate-slide-up">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                           <Card className="bg-emerald-500/5 border-emerald-500/10 p-8 rounded-[32px] flex items-center gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-2">
+                           <Card className="bg-emerald-500/5 border-emerald-500/10 p-8 rounded-[40px] flex items-center gap-6">
                               <div className="p-5 bg-emerald-500/10 rounded-2xl text-emerald-500"><TrendingUp size={30} /></div>
                               <div>
                                  <p className="text-[9px] font-bold uppercase text-emerald-600 tracking-widest opacity-60 mb-1">Total Revenue</p>
                                  <h3 className="text-3xl font-black tracking-tighter tabular-nums">₦{sales.reduce((s, sale) => s + (sale.totalPrice || 0), 0).toLocaleString()}</h3>
                               </div>
                            </Card>
-                           <Card className="bg-primary/5 border-primary/10 p-8 rounded-[32px] flex items-center gap-6 justify-between">
+                           <Card className="bg-primary/5 border-primary/10 p-8 rounded-[40px] flex items-center gap-6 justify-between">
                               <div className="flex items-center gap-6">
                                  <div className="p-5 bg-primary/10 rounded-2xl text-primary"><ShoppingBag size={30} /></div>
                                  <div>
                                     <p className="text-[9px] font-bold uppercase text-primary tracking-widest opacity-60 mb-1">Sales Volume</p>
-                                    <h3 className="text-3xl font-black tracking-tighter tabular-nums">{sales.length} <span className="text-xs opacity-40">Orders</span></h3>
+                                    <h3 className="text-3xl font-black tracking-tighter tabular-nums">{sales.length} <span className="text-xs opacity-40 italic">Invoices</span></h3>
                                  </div>
                               </div>
-                              <Button variant="ghost" className="rounded-xl w-12 h-12 bg-primary/10 text-primary" onClick={() => navigate('/admin/sales')}><ArrowUpRight size={20} /></Button>
+                              <Button variant="ghost" className="rounded-2xl w-14 h-14 bg-primary/10 text-primary" onClick={() => navigate('/admin/sales')}><ArrowUpRight size={24} /></Button>
                            </Card>
                         </div>
 
-                        <div className="space-y-4">
+                        <div className="space-y-4 px-2">
                            {salesLoading ? [1,2,3].map(i => <Skeleton key={i} height={100} borderRadius={24} />) : filteredSales.length === 0 ? (
                                <div className="py-20 text-center opacity-30">
-                                  <ShoppingBag size={80} className="mx-auto mb-4" />
+                                  <ShoppingBag size={80} className="mx-auto mb-4 stroke-1" />
                                   <p className="text-[10px] font-bold uppercase tracking-widest">No sales records found</p>
                                </div>
                            ) : filteredSales.map(sale => (
-                               <Card key={sale.id} className="p-0 overflow-hidden border-border/20 bg-card/60" noPadding>
+                               <Card key={sale.id} className="p-0 overflow-hidden border-border/20 bg-card/60 rounded-[30px]" noPadding>
                                   <div className="flex items-center gap-6 p-6">
                                      <div className="w-16 h-16 rounded-2xl bg-muted/10 flex flex-col items-center justify-center border border-border/20 shrink-0">
                                         <span className="text-[8px] font-bold opacity-40 uppercase">REC</span>
@@ -226,15 +275,15 @@ export const AdminStockPage: React.FC = () => {
                                      <div className="flex-1 min-w-0">
                                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                            <div>
-                                              <h4 className="font-bold text-lg uppercase tracking-tight truncate">{sale.customerName || 'Direct Client'}</h4>
+                                              <h4 className="font-black text-xl uppercase tracking-tighter truncate">{sale.customerName || 'Direct Client'}</h4>
                                               <div className="flex items-center gap-2 mt-1">
-                                                  <Clock size={10} className="opacity-30" />
-                                                  <span className="text-[9px] font-bold text-muted-foreground opacity-60">{new Date(sale.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                                                  <Clock size={12} className="opacity-30" />
+                                                  <span className="text-[9px] font-bold text-muted-foreground opacity-60 uppercase">{new Date(sale.createdAt).toLocaleString()}</span>
                                               </div>
                                            </div>
                                            <div className="text-right">
-                                              <p className="text-2xl font-black tracking-tighter text-emerald-600">₦{(sale.totalPrice || 0).toLocaleString()}</p>
-                                              <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest opacity-40">{sale.paymentMethod?.toUpperCase()}</p>
+                                              <p className="text-3xl font-black tracking-tighter text-emerald-600 italic">₦{(sale.totalPrice || 0).toLocaleString()}</p>
+                                              <p className="text-[9px] font-bold text-muted-foreground uppercase opacity-40">{sale.paymentMethod || 'cash'}</p>
                                            </div>
                                         </div>
                                      </div>
@@ -244,41 +293,42 @@ export const AdminStockPage: React.FC = () => {
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-4 animate-slide-up">
-                        {isLoading ? [1,2,3,4].map(i => <Skeleton key={i} height={120} borderRadius={24} />) : filtered.length === 0 ? (
+                    <div className="space-y-6 animate-slide-up px-2">
+                        {isLoading ? [1,2,3,4].map(i => <Skeleton key={i} height={150} borderRadius={32} />) : filtered.length === 0 ? (
                            <div className="py-20 text-center opacity-30">
-                              <Package size={80} className="mx-auto mb-4" />
-                              <p className="text-[10px] font-bold uppercase tracking-widest">No items in this category</p>
+                              <Package size={80} className="mx-auto mb-4 stroke-1" />
+                              <p className="text-[10px] font-bold uppercase tracking-widest">Category sector empty</p>
                            </div>
                         ) : filtered.map(item => (
-                           <Card key={item.id} className={`p-0 overflow-hidden border-border/20 bg-card/60 ${acting === item.id ? 'opacity-40 pointer-events-none' : ''}`} noPadding>
-                              <div className="flex flex-col md:flex-row items-center">
-                                 <div className="w-full md:w-48 h-40 md:h-auto overflow-hidden bg-muted/10 shrink-0">
+                           <Card key={item.id} className={`p-0 overflow-hidden border-border/20 bg-card/60 rounded-[40px] shadow-sm ${acting === item.id ? 'opacity-40 pointer-events-none' : ''}`} noPadding>
+                              <div className="flex flex-col md:flex-row items-stretch">
+                                 <div className="w-full md:w-56 h-48 md:h-auto overflow-hidden bg-slate-900 shrink-0 relative">
                                     {item.imageUrl ? (
-                                        <img src={item.imageUrl} className="w-full h-full object-cover" alt={item.name} />
+                                        <img src={item.imageUrl} className="w-full h-full object-cover opacity-80" alt={item.name} />
                                     ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-muted-foreground/30"><Package size={40} /></div>
+                                        <div className="w-full h-full flex items-center justify-center text-muted-foreground/10"><Package size={60} /></div>
                                     )}
+                                    <div className="absolute top-4 left-4">
+                                        <Badge variant={item.status === 'PENDING_APPROVAL' ? 'warning' : item.status === 'APPROVED' ? 'success' : 'danger'} className="text-[9px] font-black uppercase px-4 h-8 backdrop-blur-xl">
+                                            {item.status.replace('_', ' ')}
+                                        </Badge>
+                                    </div>
                                  </div>
-                                 <div className="flex-1 p-8 flex flex-col md:flex-row justify-between items-center gap-8 text-center md:text-left">
-                                    <div className="space-y-2">
-                                       <Badge variant={item.status === 'PENDING_APPROVAL' ? 'warning' : item.status === 'APPROVED' ? 'success' : 'danger'} className="text-[8px] font-black h-6 px-3">
-                                          {item.status.replace('_', ' ')}
-                                       </Badge>
-                                       <h4 className="font-extrabold text-2xl tracking-tighter uppercase">{item.name}</h4>
-                                       <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest opacity-60">Posted by: {item.submittedByName || 'System'}</p>
+                                 <div className="flex-1 p-10 flex flex-col md:flex-row justify-between items-center gap-10 text-center md:text-left">
+                                    <div className="space-y-2 flex-1">
+                                       <h4 className="font-black text-3xl tracking-tighter uppercase italic text-foreground leading-none">{item.name}</h4>
+                                       <p className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-[0.2em] opacity-40">Submitted by: {item.submittedByName || 'System'}</p>
+                                       <div className="flex items-center gap-3 mt-4 opacity-60">
+                                            <div className="px-3 py-1 bg-muted rounded-lg text-[9px] font-black uppercase">{item.quantity} {item.unit}</div>
+                                            <div className="px-3 py-1 bg-primary/10 text-primary rounded-lg text-[9px] font-black uppercase">₦{item.unitPrice.toLocaleString()} / Unit</div>
+                                       </div>
                                     </div>
                                     
-                                    <div className="flex flex-col items-center md:items-end">
-                                       <p className="text-2xl font-black tracking-tighter mb-1">₦{item.unitPrice.toLocaleString()}</p>
-                                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-40">{item.quantity} {item.unit} in stock</p>
-                                    </div>
-
-                                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                                    <div className="flex flex-col sm:flex-row items-center gap-4 shrink-0">
                                         {item.status === 'PENDING_APPROVAL' && (
                                            <>
                                               <Button 
-                                                className="rounded-2xl h-14 px-8 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[10px] tracking-[0.1em] shadow-glow active:scale-95 transition-all w-full sm:w-auto" 
+                                                className="rounded-2xl h-16 px-10 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[11px] tracking-widest shadow-glow-success active:scale-95 transition-all w-full sm:w-auto italic" 
                                                 onClick={() => approve(item)} 
                                                 isLoading={acting === item.id}
                                                 leftIcon={CheckCircle2}
@@ -287,7 +337,7 @@ export const AdminStockPage: React.FC = () => {
                                               </Button>
                                               <Button 
                                                 variant="outline" 
-                                                className="rounded-2xl h-14 px-8 border-rose-500/30 text-rose-500 font-black uppercase text-[10px] tracking-[0.1em] hover:bg-rose-500/5 active:scale-95 transition-all w-full sm:w-auto" 
+                                                className="rounded-2xl h-16 px-10 border-rose-500/30 text-rose-500 font-black uppercase text-[11px] tracking-widest hover:bg-rose-500/5 active:scale-95 transition-all w-full sm:w-auto italic" 
                                                 onClick={() => { setRejectItem(item); setRejectNote(''); }}
                                                 leftIcon={ShieldX}
                                               >
@@ -295,17 +345,17 @@ export const AdminStockPage: React.FC = () => {
                                               </Button>
                                            </>
                                         )}
-                                       <div className="flex items-center gap-2">
-                                           <Button variant="outline" size="icon" className="w-12 h-12 rounded-xl bg-card border-border/40 text-muted-foreground hover:text-primary transition-all" onClick={() => { setEditItem(item); setEditName(item.name); setEditQty(String(item.quantity)); setEditPrice(String(item.unitPrice)); }}><Edit3 size={18} /></Button>
-                                           <Button variant="outline" size="icon" className="w-12 h-12 rounded-xl bg-card border-border/40 text-muted-foreground hover:text-rose-500 transition-all" onClick={() => deleteItem(item)} isLoading={acting === item.id}><Trash2 size={18} /></Button>
-                                       </div>
+                                        <div className="flex items-center gap-3">
+                                            <Button variant="outline" size="icon" className="w-14 h-14 rounded-2xl bg-card border-border/40 text-muted-foreground hover:text-primary transition-all shadow-sm" onClick={() => { setEditItem(item); setEditName(item.name); setEditQty(String(item.quantity)); setEditPrice(String(item.unitPrice)); }}><Edit3 size={24} /></Button>
+                                            <Button variant="outline" size="icon" className="w-14 h-14 rounded-2xl bg-card border-border/40 text-muted-foreground hover:text-rose-500 transition-all shadow-sm" onClick={() => deleteItem(item)} isLoading={acting === item.id}><Trash2 size={24} /></Button>
+                                        </div>
                                     </div>
                                  </div>
                               </div>
                               {item.rejectionComment && item.status === 'REJECTED' && (
-                                 <div className="bg-rose-500/5 p-4 border-t border-rose-500/10 flex items-center gap-3 text-rose-600">
-                                    <ShieldX size={16} className="shrink-0" />
-                                    <p className="text-[10px] font-bold italic opacity-80">Reason: {item.rejectionComment}</p>
+                                 <div className="bg-rose-500/5 p-6 border-t border-rose-500/10 flex items-center gap-4 text-rose-600">
+                                    <AlertTriangle size={20} className="shrink-0" />
+                                    <p className="text-[11px] font-black uppercase tracking-tight italic">Reason: {item.rejectionComment}</p>
                                  </div>
                               )}
                            </Card>
@@ -318,28 +368,28 @@ export const AdminStockPage: React.FC = () => {
             <Modal
                 isOpen={!!rejectItem}
                 onClose={() => setRejectItem(null)}
-                title="REJECTION REASON"
+                title="REJECTION PROTOCOL"
                 maxWidth="sm"
             >
-                 <div className="space-y-8 py-2 animate-slide-up">
-                    <div className="bg-rose-600/5 p-6 rounded-2xl border border-rose-600/10 space-y-2">
-                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-rose-600">Block Resource</h4>
-                        <p className="text-xs italic text-muted-foreground opacity-70">Specify why this product is being rejected.</p>
+                 <div className="space-y-10 py-4 animate-slide-up">
+                    <div className="bg-rose-500/10 p-8 rounded-[32px] border border-rose-500/20 space-y-3">
+                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-rose-600">Block Resource Entry</h4>
+                        <p className="text-[10px] font-bold italic text-muted-foreground opacity-60 leading-relaxed">System requires a valid justification for rejection to notify the submission officer.</p>
                     </div>
                     
-                    <div className="space-y-3">
-                        <Label>Comments</Label>
+                    <div className="space-y-4">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2">Reason (Required)</Label>
                         <textarea 
-                            className="w-full h-32 p-5 bg-card border border-border/40 rounded-2xl outline-none focus:border-rose-500 transition-all font-bold text-sm shadow-inner resize-none" 
+                            className="w-full h-40 p-8 bg-card border border-border/40 rounded-[32px] outline-none focus:border-rose-500 transition-all font-bold text-sm shadow-inner italic resize-none custom-scrollbar" 
                             value={rejectNote} 
                             onChange={e => setRejectNote(e.target.value)} 
-                            placeholder="Enter reason..." 
+                            placeholder="Identify stock discrepancies or quality issues..." 
                         />
                     </div>
                     
-                    <div className="flex gap-4">
-                       <Button variant="outline" className="flex-1 rounded-xl h-14 font-bold uppercase text-[10px] tracking-widest" onClick={() => setRejectItem(null)}>Cancel</Button>
-                       <Button className="flex-1 rounded-xl h-14 bg-rose-600 hover:bg-rose-700 font-bold uppercase text-[10px] tracking-widest" onClick={confirmReject} isLoading={acting === rejectItem?.id}>Reject Now</Button>
+                    <div className="flex gap-5">
+                       <Button variant="outline" className="flex-1 rounded-[24px] h-18 font-black uppercase text-[11px] tracking-widest" onClick={() => setRejectItem(null)}>Abort</Button>
+                       <Button className="flex-1 rounded-[24px] h-18 bg-rose-600 hover:bg-rose-700 text-white font-black uppercase text-[11px] tracking-widest shadow-glow-rose" onClick={confirmReject} isLoading={acting === rejectItem?.id}>Confirm Void</Button>
                     </div>
                  </div>
             </Modal>
@@ -348,30 +398,65 @@ export const AdminStockPage: React.FC = () => {
             <Modal
                 isOpen={!!editItem}
                 onClose={() => setEditItem(null)}
-                title="EDIT PRODUCT"
+                title="OVERRIDE PRODUCT CORE"
                 maxWidth="sm"
             >
-                 <div className="space-y-8 py-2 animate-slide-up">
-                    <div className="space-y-6">
-                        <div className="space-y-2">
-                           <Label>Product Name</Label>
-                           <Input type="text" className="h-14 rounded-xl bg-card border-border/40 font-bold" value={editName} onChange={e => setEditName(e.target.value)} />
+                 <div className="space-y-10 py-4 animate-slide-up">
+                    <div className="space-y-8">
+                        <div className="space-y-4">
+                            <Label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2">Visual Telemetry</Label>
+                            <div className="relative aspect-video rounded-[40px] overflow-hidden bg-slate-900 border-4 border-card shadow-2xl group">
+                                {editItem?.imageUrl ? (
+                                    <>
+                                        <img src={editItem.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-all duration-700" alt="Preview" />
+                                        <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center backdrop-blur-xl">
+                                            <label className="cursor-pointer bg-white text-slate-950 px-8 py-4 rounded-[20px] font-black text-[11px] uppercase tracking-widest hover:scale-110 active:scale-95 transition-all shadow-2xl">
+                                                Update Optic
+                                                <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                                            </label>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <label className={`
+                                        w-full h-full flex flex-col items-center justify-center cursor-pointer transition-all border-4 border-dashed
+                                        ${uploadPhase ? 'border-primary bg-primary/5 animate-pulse' : 'border-border/20 hover:bg-primary/5 hover:border-primary/40'}
+                                    `}>
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={!!uploadPhase} />
+                                        {uploadPhase ? (
+                                            <div className="flex flex-col items-center gap-6">
+                                                <div className="w-16 h-16 rounded-full border-8 border-primary border-t-transparent animate-spin" />
+                                                <span className="text-[12px] font-black uppercase text-primary tracking-[0.2em]">{uploadProgress}%</span>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <Upload size={48} className="text-muted-foreground/20 mb-4" />
+                                                <span className="text-[11px] font-black uppercase tracking-[0.2em] opacity-40 italic">Log Visual Asset</span>
+                                            </>
+                                        )}
+                                    </label>
+                                )}
+                            </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                           <div className="space-y-2">
-                              <Label>Current Quantity</Label>
-                              <Input type="number" className="h-14 rounded-xl bg-card border-border/40 font-bold" value={editQty} onChange={e => setEditQty(e.target.value)} />
+
+                        <div className="space-y-4">
+                           <Label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2">Designation</Label>
+                           <Input type="text" className="h-18 px-8 rounded-[28px] bg-card border-border/40 font-black text-lg italic" value={editName} onChange={e => setEditName(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-6">
+                           <div className="space-y-4">
+                              <Label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2">Reserve Qty</Label>
+                              <Input type="number" className="h-18 px-8 rounded-[28px] bg-card border-border/40 font-black text-2xl tabular-nums italic" value={editQty} onChange={e => setEditQty(e.target.value)} />
                            </div>
-                           <div className="space-y-2">
-                              <Label>Price (₦)</Label>
-                              <Input type="number" className="h-14 rounded-xl bg-card border-border/40 font-bold text-primary" value={editPrice} onChange={e => setEditPrice(e.target.value)} />
+                           <div className="space-y-4">
+                              <Label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2">Price (₦)</Label>
+                              <Input type="number" className="h-18 px-8 rounded-[28px] bg-card border-border/40 font-black text-2xl tabular-nums text-primary italic" value={editPrice} onChange={e => setEditPrice(e.target.value)} />
                            </div>
                         </div>
                     </div>
                     
-                    <div className="flex gap-4">
-                       <Button variant="outline" className="flex-1 rounded-xl h-14 font-bold uppercase text-[10px] tracking-widest" onClick={() => setEditItem(null)}>Discard</Button>
-                       <Button className="flex-1 rounded-xl h-14 font-bold uppercase text-[10px] tracking-widest shadow-lg" onClick={confirmEdit} isLoading={acting === editItem?.id}>Save Changes</Button>
+                    <div className="flex gap-5 pt-4">
+                       <Button variant="outline" className="flex-1 rounded-[28px] h-20 font-black uppercase text-[11px] tracking-widest border-[3px]" onClick={() => setEditItem(null)}>Abort</Button>
+                       <Button className="flex-1 rounded-[28px] h-20 bg-primary text-white font-black uppercase text-[11px] tracking-[0.2em] shadow-glow" onClick={confirmEdit} isLoading={acting === editItem?.id}>Sync Data</Button>
                     </div>
                  </div>
             </Modal>

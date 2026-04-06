@@ -672,7 +672,7 @@ export const StoragePage: React.FC = () => {
                             onClick={handleSubmit}
                             isLoading={isSubmitting}
                         >
-                            {editingItem ? 'Execute Override' : 'Initialize Launch'} <Send className="ml-4" size={24} strokeWidth={3} />
+                            {editingItem ? 'Update Asset Core' : 'Submit to Admin'} <Send className="ml-4" size={24} strokeWidth={3} />
                         </Button>
                     </div>
                 </div>
