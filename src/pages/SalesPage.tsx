@@ -121,7 +121,7 @@ export const SalesPage: React.FC = () => {
         ), [stock, debouncedSearch]);
 
     return (
-        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 h-screen max-h-screen animate-slide-up pb-8 overflow-hidden">
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 animate-slide-up pb-20">
             {/* Catalog Section */}
             <div className="flex-1 flex flex-col space-y-8 overflow-hidden bg-background/50 rounded-[40px] p-2 lg:p-6 lg:border border-border/20">
                 {/* Header with Search */}

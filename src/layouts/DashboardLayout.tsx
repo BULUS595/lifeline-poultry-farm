@@ -158,8 +158,8 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         </div>
       </aside>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col h-screen relative overflow-hidden">
+      {/* ── Main System Area ─────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col h-[100dvh] relative overflow-hidden">
         {/* Desktop Top Nav */}
         <header className="hidden lg:flex items-center justify-between h-24 px-12 bg-background/80 backdrop-blur-xl sticky top-0 z-30 border-b border-border/50">
           <div>
@@ -262,9 +262,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
            </div>
         </main>
 
-        {/* Mobile Bottom Navigation - Redesigned for Dark Premium Look */}
-        <nav className="relative z-[100] lg:hidden bg-[#050505] border-t border-white/5 pb-safe shadow-[0_-20px_50px_-15px_rgba(0,0,0,0.8)] backdrop-blur-xl shrink-0">
-          <div className="flex items-center justify-around h-24 px-4 overflow-hidden">
+        {/* ── Mobile Bottom Navigation ────────────────────────────────────── */}
+        <nav className="shrink-0 lg:hidden bg-slate-950 border-t border-white/5 pb-safe shadow-[0_-20px_50px_-15px_rgba(0,0,0,0.8)] backdrop-blur-xl z-[100]">
+          <div className="flex items-center justify-around h-20 px-2">
             {filteredNavItems.slice(0, 4).map((item) => {
               const isActive = location.pathname === item.path;
               return (
