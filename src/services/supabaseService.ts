@@ -6,6 +6,57 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Auth service used by AuthContext
+export const supabaseAuthService = {
+  async signIn(email: string, password: string) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    if (!data.user) throw new Error('No user returned from sign in');
+    const profile = await supabaseAuthService.getUserProfile(data.user.id);
+    if (!profile) throw new Error('User profile not found. Please contact your administrator.');
+    return { user: profile, session: data.session };
+  },
+
+  async signOut() {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  },
+
+  async getCurrentUser() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return null;
+      return await supabaseAuthService.getUserProfile(session.user.id);
+    } catch {
+      return null;
+    }
+  },
+
+  async getUserProfile(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      if (error) throw error;
+      return {
+        id: data.id,
+        name: data.name || data.full_name || 'User',
+        email: data.email,
+        role: data.role || 'staff',
+        farmIds: data.farm_ids || ['1'],
+        farmId: data.farm_id || '1',
+        phone: data.phone,
+        avatar: data.avatar_url,
+      };
+    } catch {
+      return null;
+    }
+  },
+};
+
+
 export const supabaseDataService = {
   _mapStockItem(item: any): StockItem {
     const rawStatus = (item.status || 'PENDING_APPROVAL').toUpperCase();
