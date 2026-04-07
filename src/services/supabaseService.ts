@@ -350,5 +350,32 @@ export const supabaseDataService = {
           console.error('Mortality log error:', err);
           return null;
       }
+  },
+
+  async clearOperationalData(): Promise<{success: boolean; message?: string}> {
+      try {
+          // Delete operations on existing tables
+          await Promise.all([
+              supabase.from('retail_sales').delete().neq('id', '0'),
+              supabase.from('expenses').delete().neq('id', '0'),
+              supabase.from('stock_activity_logs').delete().neq('id', '0'),
+              supabase.from('mortality_logs').delete().neq('id', '0')
+          ]);
+          return { success: true };
+      } catch (err: any) {
+          console.error('Clear operational data error:', err);
+          return { success: false, message: err.message };
+      }
+  },
+
+  async clearAllInventory(): Promise<{success: boolean; message?: string}> {
+      try {
+          await supabase.from('stock_items').delete().neq('id', '0');
+          return { success: true };
+      } catch (err: any) {
+          console.error('Clear inventory error:', err);
+          return { success: false, message: err.message };
+      }
   }
 };
+
