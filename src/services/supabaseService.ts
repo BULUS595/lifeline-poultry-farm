@@ -158,20 +158,22 @@ export const supabaseDataService = {
 
   async recordRetailSale(sale: Omit<RetailSale, 'id' | 'createdAt'>) {
      try {
-         const { data, error } = await supabase.rpc('process_retail_sale', {
-             p_receipt_number: sale.receiptNumber,
-             p_items: sale.items,
-             p_total_price: sale.totalPrice,
-             p_payment_method: sale.paymentMethod,
-             p_customer_name: sale.customerName,
-             p_salesperson_id: sale.salespersonId,
-             p_farm_id: sale.farmId
-         });
-         if (error) throw error;
-         return data as RetailSale;
-     } catch (err) {
+         const { data, error } = await supabase.rpc('process_retail_sale', { payload: sale });
+         if (error) throw new Error(error.message);
+         return {
+            id: data?.id || '',
+            receiptNumber: data?.receiptNumber || sale.receiptNumber,
+            items: data?.items || sale.items,
+            totalPrice: data?.totalPrice || sale.totalPrice,
+            paymentMethod: data?.paymentMethod || sale.paymentMethod,
+            customerName: data?.customerName || sale.customerName,
+            salespersonId: data?.salespersonId || sale.salespersonId,
+            createdAt: data?.createdAt || new Date().toISOString(),
+            farmId: data?.farmId || sale.farmId
+         } as RetailSale;
+     } catch (err: any) {
          console.error('Transaction failure:', err);
-         throw err;
+         throw new Error(err?.message || 'Transaction failed');
      }
   },
 
