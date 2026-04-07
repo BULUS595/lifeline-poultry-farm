@@ -354,20 +354,16 @@ export const supabaseDataService = {
 
   async clearOperationalData(): Promise<{success: boolean; message?: string}> {
       try {
-          // Delete operations on existing tables
-          const results = await Promise.all([
-              supabase.from('retail_sales').delete().not('id', 'is', null),
-              supabase.from('expenses').delete().not('id', 'is', null),
-              supabase.from('stock_activity_logs').delete().not('id', 'is', null),
-              supabase.from('mortality_logs').delete().not('id', 'is', null)
-          ]);
+          const tables = ['retail_sales', 'expenses', 'stock_activity_logs', 'mortality_logs'];
           
-          const errors = results.map(r => r.error).filter(Boolean);
-          if (errors.length > 0) {
-              console.error('Delete errors:', errors);
-              throw new Error(errors[0]?.message || 'Database error during deletion');
+          for (const table of tables) {
+              const { data } = await supabase.from(table).select('id');
+              if (data && data.length > 0) {
+                  const ids = data.map((row: any) => row.id);
+                  const { error } = await supabase.from(table).delete().in('id', ids);
+                  if (error) throw new Error(`${table} delete error: ${error.message}`);
+              }
           }
-          
           return { success: true };
       } catch (err: any) {
           console.error('Clear operational data error:', err);
@@ -377,8 +373,12 @@ export const supabaseDataService = {
 
   async clearAllInventory(): Promise<{success: boolean; message?: string}> {
       try {
-          const { error } = await supabase.from('stock_items').delete().not('id', 'is', null);
-          if (error) throw new Error(error.message);
+          const { data } = await supabase.from('stock_items').select('id');
+          if (data && data.length > 0) {
+              const ids = data.map((row: any) => row.id);
+              const { error } = await supabase.from('stock_items').delete().in('id', ids);
+              if (error) throw new Error(`stock_items delete error: ${error.message}`);
+          }
           return { success: true };
       } catch (err: any) {
           console.error('Clear inventory error:', err);
