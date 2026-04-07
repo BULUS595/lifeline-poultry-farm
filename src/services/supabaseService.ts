@@ -355,12 +355,19 @@ export const supabaseDataService = {
   async clearOperationalData(): Promise<{success: boolean; message?: string}> {
       try {
           // Delete operations on existing tables
-          await Promise.all([
-              supabase.from('retail_sales').delete().neq('id', '0'),
-              supabase.from('expenses').delete().neq('id', '0'),
-              supabase.from('stock_activity_logs').delete().neq('id', '0'),
-              supabase.from('mortality_logs').delete().neq('id', '0')
+          const results = await Promise.all([
+              supabase.from('retail_sales').delete().not('id', 'is', null),
+              supabase.from('expenses').delete().not('id', 'is', null),
+              supabase.from('stock_activity_logs').delete().not('id', 'is', null),
+              supabase.from('mortality_logs').delete().not('id', 'is', null)
           ]);
+          
+          const errors = results.map(r => r.error).filter(Boolean);
+          if (errors.length > 0) {
+              console.error('Delete errors:', errors);
+              throw new Error(errors[0]?.message || 'Database error during deletion');
+          }
+          
           return { success: true };
       } catch (err: any) {
           console.error('Clear operational data error:', err);
@@ -370,7 +377,8 @@ export const supabaseDataService = {
 
   async clearAllInventory(): Promise<{success: boolean; message?: string}> {
       try {
-          await supabase.from('stock_items').delete().neq('id', '0');
+          const { error } = await supabase.from('stock_items').delete().not('id', 'is', null);
+          if (error) throw new Error(error.message);
           return { success: true };
       } catch (err: any) {
           console.error('Clear inventory error:', err);
