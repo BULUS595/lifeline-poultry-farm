@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-    X, Plus, Database, Package, 
-    Save, Upload, Edit2, Trash2, Search,
-    Filter, Clock, CheckCircle2, AlertCircle
+import {
+    Plus, Database, Package,
+    Save, Upload, Edit2, Search, Clock, CheckCircle2, XCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, supabaseDataService } from '../services/supabaseService';
@@ -30,9 +29,14 @@ const EMPTY_FORM: FormData = {
     imageUrl: '',
 };
 
+const statusConfig: Record<string, { label: string; variant: any; icon: React.ReactNode }> = {
+    APPROVED:         { label: 'Approved',        variant: 'success', icon: <CheckCircle2 size={13} /> },
+    PENDING_APPROVAL: { label: 'Pending Approval', variant: 'warning', icon: <Clock size={13} /> },
+    REJECTED:         { label: 'Rejected',         variant: 'danger',  icon: <XCircle size={13} /> },
+};
+
 export const StoragePage: React.FC = () => {
     const { user, isAdmin, isInventory } = useAuth();
-    const canManageAll = isAdmin;
     const canAddStock = isInventory || isAdmin;
 
     const [items, setItems] = useState<StockItem[]>([]);
@@ -50,22 +54,17 @@ export const StoragePage: React.FC = () => {
         setIsLoading(true);
         try {
             const data = await supabaseDataService.getAdminStockItems();
-            if (canManageAll) {
-                setItems(data || []);
-            } else {
-                // Non-admins see everything but can only edit their own or see approved items
-                setItems(data || []);
-            }
+            setItems(data || []);
         } catch (err) {
             console.error(err);
         } finally {
             setIsLoading(false);
         }
-    }, [canManageAll]);
+    }, []);
 
     useEffect(() => {
         loadData();
-        const ch = supabase.channel('storage-sync-refined-v1')
+        const ch = supabase.channel('storage-v2')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items' }, loadData)
             .subscribe();
         return () => { supabase.removeChannel(ch); };
@@ -80,18 +79,12 @@ export const StoragePage: React.FC = () => {
                 img.src = event.target?.result as string;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    const MAX_SIZE = 1200;
-                    if (width > height) {
-                        if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
-                    } else {
-                        if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
-                    }
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx?.drawImage(img, 0, 0, width, height);
+                    let { width, height } = img;
+                    const MAX = 1200;
+                    if (width > height) { if (width > MAX) { height *= MAX / width; width = MAX; } }
+                    else { if (height > MAX) { width *= MAX / height; height = MAX; } }
+                    canvas.width = width; canvas.height = height;
+                    canvas.getContext('2d')?.drawImage(img, 0, 0, width, height);
                     canvas.toBlob((blob) => { if (blob) resolve(blob); }, 'image/jpeg', 0.85);
                 };
             };
@@ -112,14 +105,19 @@ export const StoragePage: React.FC = () => {
             const url = await supabaseDataService.uploadStockImage(compressed);
             clearInterval(timer);
             setUploadProgress(100);
-            if (url) {
-                setForm(f => ({ ...f, imageUrl: url }));
-            }
+            if (url) setForm(f => ({ ...f, imageUrl: url }));
         } catch (err) {
             console.error(err);
         } finally {
             setTimeout(() => { setUploadPhase(null); setUploadProgress(0); }, 1500);
         }
+    };
+
+    const openAdd = () => { setEditingItem(null); setForm(EMPTY_FORM); setShowForm(true); };
+    const openEdit = (item: StockItem) => {
+        setEditingItem(item);
+        setForm({ name: item.name, quantity: String(item.quantity), unitPrice: String(item.unitPrice), unit: item.unit || '', category: item.category || '', description: item.description || '', imageUrl: item.imageUrl || '' });
+        setShowForm(true);
     };
 
     const handleSubmit = async () => {
@@ -135,9 +133,9 @@ export const StoragePage: React.FC = () => {
                 description: form.description,
                 imageUrl: form.imageUrl,
                 status: editingItem ? editingItem.status : 'PENDING_APPROVAL',
-                submittedBy: user.id as string,
-                submittedByName: (user.name || 'Staff') as string,
-                farmId: '1'
+                submittedBy: user.id,
+                submittedByName: user.name || 'Staff',
+                farmId: '1',
             };
             if (editingItem) {
                 await supabaseDataService.updateStockItem(editingItem.id, payload);
@@ -155,241 +153,218 @@ export const StoragePage: React.FC = () => {
         }
     };
 
-    const filteredItems = useMemo(() => {
-        return items.filter(i => {
+    const filteredItems = useMemo(() =>
+        items.filter(i => {
             const matchSearch = i.name.toLowerCase().includes(searchTerm.toLowerCase());
             const matchStatus = filterStatus === 'all' || i.status === filterStatus;
             return matchSearch && matchStatus;
-        });
-    }, [items, searchTerm, filterStatus]);
+        }),
+        [items, searchTerm, filterStatus]
+    );
 
-    if (isLoading && items.length === 0) {
-        return (
-            <div className="space-y-8 animate-slide-up px-4">
-                <div className="flex justify-between items-center bg-card/40 p-8 rounded-[32px] border border-border/10">
-                    <Skeleton width={300} height={40} />
-                    <Skeleton width={150} height={50} borderRadius={20} />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <Skeleton key={i} height={350} borderRadius={40} />)}
-                </div>
-            </div>
-        );
-    }
+    const counts = useMemo(() => ({
+        all: items.length,
+        PENDING_APPROVAL: items.filter(i => i.status === 'PENDING_APPROVAL').length,
+        APPROVED: items.filter(i => i.status === 'APPROVED').length,
+        REJECTED: items.filter(i => i.status === 'REJECTED').length,
+    }), [items]);
+
+    const filterTabs = [
+        { key: 'all',             label: 'All',     count: counts.all },
+        { key: 'PENDING_APPROVAL', label: 'Pending', count: counts.PENDING_APPROVAL },
+        { key: 'APPROVED',        label: 'Approved', count: counts.APPROVED },
+        { key: 'REJECTED',        label: 'Rejected', count: counts.REJECTED },
+    ];
 
     return (
-        <div className="space-y-10 animate-slide-up px-2 pb-24 max-w-7xl mx-auto">
-            {/* Header Section */}
-            <div className="flex flex-col md:flex-row gap-6 justify-between items-center px-4">
-                <div className="flex items-center gap-6">
-                    <div className="p-4 bg-primary/10 text-primary rounded-3xl border border-primary/20">
-                        <Database size={32} />
-                    </div>
-                    <div>
-                        <h1 className="text-4xl font-black tracking-tight uppercase">Inventory</h1>
-                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest opacity-60">Manage your farm stock and supplies</p>
-                    </div>
-                </div>
+        <div className="min-h-screen bg-background pb-20">
+            <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
-                <div className="flex items-center gap-4 w-full md:w-auto">
-                    <div className="relative flex-1 md:w-80 overflow-hidden group">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
-                        <input 
-                            placeholder="Find items..." 
-                            className="w-full pl-12 pr-4 h-14 rounded-2xl bg-card/60 border border-border/40 focus:border-primary/50 transition-all font-bold" 
-                            value={searchTerm} 
-                            onChange={e => setSearchTerm(e.target.value)} 
-                        />
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
+                            <Database size={20} />
+                        </div>
+                        <div>
+                            <h1 className="text-2xl font-bold tracking-tight">Inventory</h1>
+                            <p className="text-sm text-muted-foreground">Manage your farm stock and supplies</p>
+                        </div>
                     </div>
                     {canAddStock && (
-                        <Button onClick={() => { setShowForm(true); setEditingItem(null); setForm(EMPTY_FORM); }} className="h-14 px-8 rounded-2xl shadow-glow">
-                            <Plus size={20} className="mr-2" /> Add Stock
-                        </Button>
+                        <button
+                            onClick={openAdd}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 transition-all active:scale-95 shadow-sm"
+                        >
+                            <Plus size={18} />
+                            Add Stock
+                        </button>
                     )}
                 </div>
-            </div>
 
-            {/* Filter Tabs */}
-            <div className="flex items-center gap-3 px-4 overflow-x-auto no-scrollbar pb-2">
-                <Filter size={16} className="text-muted-foreground mr-2 shrink-0" />
-                {['all', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED'].map(k => (
-                    <button 
-                        key={k} 
-                        onClick={() => setFilterStatus(k)} 
-                        className={`
-                            px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap border
-                            ${filterStatus === k 
-                                ? 'bg-primary text-primary-foreground border-primary shadow-sm' 
-                                : 'bg-card text-muted-foreground border-border/20 hover:bg-muted/10'}
-                        `}
-                    >
-                        {k === 'all' ? 'All Items' : k.replace('_', ' ')}
-                    </button>
-                ))}
-            </div>
-
-            {/* Grid display */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 px-4">
-                {filteredItems.length === 0 ? (
-                    <div className="col-span-full py-24 text-center bg-card/20 rounded-[40px] border border-dashed border-border/40">
-                        <Package size={64} className="mx-auto opacity-10 mb-4" />
-                        <p className="text-sm font-bold opacity-30 uppercase tracking-widest italic">No items found matching your filters</p>
+                {/* Search + Filters */}
+                <div className="space-y-4">
+                    <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                        <input
+                            placeholder="Search items..."
+                            className="w-full pl-10 pr-4 h-11 rounded-xl bg-card border border-border/40 text-sm focus:outline-none focus:border-primary/50 transition-all"
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                        />
                     </div>
-                ) : filteredItems.map(item => (
-                    <div key={item.id} className="group bg-card rounded-[40px] border border-border/30 overflow-hidden transition-all duration-500 hover:border-primary/30 hover:-translate-y-2 hover:shadow-2xl flex flex-col h-full">
-                        {/* Image area */}
-                        <div className="h-56 bg-slate-900 relative">
-                            {item.imageUrl ? (
-                                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-primary/10">
-                                    <Package size={64} />
-                                </div>
-                            )}
-                            <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
-                                <Badge variant={item.status === 'APPROVED' ? 'success' : item.status === 'PENDING_APPROVAL' ? 'warning' : 'danger'} className="shadow-lg backdrop-blur-md">
-                                    {item.status.replace('_', ' ')}
-                                </Badge>
-                                <span className="bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl text-white text-[10px] font-black border border-white/10 shadow-lg">
-                                    ₦{item.unitPrice.toLocaleString()}
+
+                    <div className="flex gap-2 border-b border-border/30 overflow-x-auto no-scrollbar">
+                        {filterTabs.map(t => (
+                            <button
+                                key={t.key}
+                                onClick={() => setFilterStatus(t.key)}
+                                className={`
+                                    flex items-center gap-2 px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-all
+                                    ${filterStatus === t.key
+                                        ? 'border-primary text-primary'
+                                        : 'border-transparent text-muted-foreground hover:text-foreground'}
+                                `}
+                            >
+                                {t.label}
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${filterStatus === t.key ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>
+                                    {t.count}
                                 </span>
-                            </div>
-                        </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
 
-                        {/* Content area */}
-                        <div className="p-6 flex flex-col flex-1 gap-4">
-                            <div className="space-y-1">
-                                <h4 className="font-black text-lg uppercase tracking-tight truncate group-hover:text-primary transition-colors">{item.name}</h4>
-                                <p className="text-[9px] font-bold text-muted-foreground uppercase opacity-40 tracking-widest">Added by {item.submittedByName || 'Staff'}</p>
-                            </div>
+                {/* List */}
+                {isLoading && items.length === 0 ? (
+                    <div className="space-y-3">
+                        {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} height={80} borderRadius={16} />)}
+                    </div>
+                ) : filteredItems.length === 0 ? (
+                    <div className="py-20 flex flex-col items-center text-center gap-3 bg-card/30 rounded-2xl border border-dashed border-border/30">
+                        <Package size={40} className="text-muted-foreground/20" />
+                        <p className="text-sm font-medium text-muted-foreground/50">No items found</p>
+                        {canAddStock && (
+                            <button onClick={openAdd} className="text-sm text-primary font-semibold hover:underline mt-1">
+                                + Add your first stock item
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <div className="bg-card rounded-2xl border border-border/30 overflow-hidden divide-y divide-border/20">
+                        {filteredItems.map(item => {
+                            const sc = statusConfig[item.status] || statusConfig['PENDING_APPROVAL'];
+                            return (
+                                <div key={item.id} className="flex items-center gap-4 px-5 py-4 hover:bg-muted/5 transition-all group">
+                                    {/* Thumbnail */}
+                                    <div className="w-12 h-12 rounded-xl bg-slate-900 overflow-hidden shrink-0 border border-border/10">
+                                        {item.imageUrl
+                                            ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                            : <div className="w-full h-full flex items-center justify-center text-primary/20"><Package size={22} /></div>
+                                        }
+                                    </div>
 
-                            <div className="mt-auto grid grid-cols-2 gap-3 pt-4 border-t border-border/10">
-                                <div className="bg-muted/10 p-3 rounded-2xl border border-border/10">
-                                    <p className="text-[8px] font-black text-muted-foreground uppercase opacity-40 mb-1">Available</p>
-                                    <p className="text-base font-black italic">{item.quantity} <span className="text-[9px] uppercase opacity-40">{item.unit}</span></p>
-                                </div>
-                                <div className="flex gap-2 items-center justify-end">
-                                    <button 
-                                        onClick={() => {
-                                            setEditingItem(item);
-                                            setForm({
-                                                name: item.name,
-                                                quantity: String(item.quantity),
-                                                unitPrice: String(item.unitPrice),
-                                                unit: item.unit || '',
-                                                category: item.category || '',
-                                                description: item.description || '',
-                                                imageUrl: item.imageUrl || ''
-                                            });
-                                            setShowForm(true);
-                                        }}
-                                        className="p-3 bg-muted/20 hover:bg-primary/20 hover:text-primary rounded-xl transition-all active:scale-90"
+                                    {/* Details */}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{item.name}</p>
+                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                                            <span className="text-xs text-muted-foreground">{item.quantity} {item.unit}</span>
+                                            <span className="text-muted-foreground/40">·</span>
+                                            <span className="text-xs text-muted-foreground">₦{item.unitPrice.toLocaleString()} / unit</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Status badge */}
+                                    <div className="shrink-0 hidden sm:flex items-center gap-1.5">
+                                        <Badge variant={sc.variant} className="flex items-center gap-1 text-[10px] py-1">
+                                            {sc.icon} {sc.label}
+                                        </Badge>
+                                    </div>
+
+                                    {/* Edit button */}
+                                    <button
+                                        onClick={() => openEdit(item)}
+                                        className="shrink-0 p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
                                     >
                                         <Edit2 size={16} />
                                     </button>
-                                    <button className="p-3 bg-muted/20 hover:bg-rose-500/20 hover:text-rose-500 rounded-xl transition-all active:scale-90 opacity-40 hover:opacity-100">
-                                        <Trash2 size={16} />
-                                    </button>
                                 </div>
-                            </div>
-                        </div>
+                            );
+                        })}
                     </div>
-                ))}
+                )}
             </div>
 
             {/* Add/Edit Modal */}
-            <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingItem ? "Update Stock" : "Add New Stock"} maxWidth="lg">
-                <div className="space-y-8 py-4">
-                    {/* Visual Section */}
-                    <div className="bg-muted/10 p-4 rounded-[32px] border-2 border-dashed border-border/30 overflow-hidden h-64 flex flex-col items-center justify-center relative group">
+            <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editingItem ? 'Edit Stock Item' : 'Add New Stock'} maxWidth="md">
+                <div className="space-y-5 py-2">
+
+                    {/* Photo upload */}
+                    <div
+                        className="relative h-44 rounded-2xl bg-muted/10 border-2 border-dashed border-border/40 overflow-hidden flex items-center justify-center group cursor-pointer"
+                    >
                         {form.imageUrl ? (
-                            <div className="absolute inset-0">
-                                <img src={form.imageUrl} className="w-full h-full object-cover" alt="Preview" />
-                                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                                    <label className="bg-white text-black px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest cursor-pointer shadow-glow transform hover:scale-105 active:scale-95 transition-all">
-                                        Update Photo
+                            <>
+                                <img src={form.imageUrl} className="absolute inset-0 w-full h-full object-cover" alt="Preview" />
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                                    <label className="px-4 py-2 bg-white text-black text-xs font-bold rounded-xl cursor-pointer hover:bg-white/90 transition-all">
+                                        Change Photo
                                         <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
                                     </label>
                                 </div>
-                            </div>
+                            </>
                         ) : uploadPhase ? (
-                            <div className="flex flex-col items-center gap-4 animate-slide-up">
-                                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-glow" />
-                                <h4 className="font-black uppercase tracking-widest text-[10px] text-primary">{uploadPhase}</h4>
-                                <div className="w-48 h-1.5 bg-muted rounded-full overflow-hidden">
-                                    <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                            <div className="flex flex-col items-center gap-3">
+                                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                                <p className="text-xs font-semibold text-primary">{uploadPhase}</p>
+                                <div className="w-40 h-1.5 bg-muted rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary transition-all duration-300 rounded-full" style={{ width: `${uploadProgress}%` }} />
                                 </div>
                             </div>
                         ) : (
-                            <label className="flex flex-col items-center gap-4 cursor-pointer hover:scale-105 transition-all duration-500">
-                                <div className="p-6 bg-card border border-border/40 rounded-3xl text-primary shadow-soft group-hover:shadow-glow transition-all">
-                                    <Upload size={32} />
+                            <label className="flex flex-col items-center gap-2 cursor-pointer hover:scale-105 transition-all">
+                                <div className="w-12 h-12 bg-card border border-border/40 rounded-2xl flex items-center justify-center text-primary">
+                                    <Upload size={22} />
                                 </div>
-                                <div className="text-center">
-                                    <h4 className="font-black uppercase tracking-widest text-[10px]">Add Product Photo</h4>
-                                    <p className="text-[9px] font-bold text-muted-foreground mt-2 opacity-40 uppercase">Support: PNG, JPG</p>
-                                </div>
+                                <p className="text-xs font-semibold text-muted-foreground">Click to add a photo</p>
                                 <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
                             </label>
                         )}
                     </div>
 
-                    {/* Form Section */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <Label>Item Name</Label>
-                            <Input 
-                                placeholder="e.g. Layers Mash" 
-                                value={form.name} 
-                                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
-                            />
+                    {/* Form fields */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2 space-y-1.5">
+                            <Label>Item Name *</Label>
+                            <Input placeholder="e.g. Layers Mash" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="h-11" />
                         </div>
-                        <div className="space-y-2">
-                            <Label>Logistics Unit</Label>
-                            <Input 
-                                placeholder="e.g. Bags, Units" 
-                                value={form.unit} 
-                                onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} 
-                            />
+                        <div className="space-y-1.5">
+                            <Label>Quantity *</Label>
+                            <Input type="number" placeholder="0" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} className="h-11" />
                         </div>
-                        <div className="space-y-2">
-                            <Label>Quantity</Label>
-                            <Input 
-                                type="number" 
-                                placeholder="0.00" 
-                                value={form.quantity} 
-                                onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} 
-                            />
+                        <div className="space-y-1.5">
+                            <Label>Unit</Label>
+                            <Input placeholder="Bags, Units..." value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} className="h-11" />
                         </div>
-                        <div className="space-y-2">
-                            <Label>Unit Price (₦)</Label>
-                            <Input 
-                                type="number" 
-                                placeholder="0.00" 
-                                value={form.unitPrice} 
-                                onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} 
-                                className="text-emerald-500 border-emerald-500/20 bg-emerald-500/5 focus:border-emerald-500/50"
-                            />
+                        <div className="col-span-2 space-y-1.5">
+                            <Label>Unit Price (₦) *</Label>
+                            <Input type="number" placeholder="0.00" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))} className="h-11 text-emerald-500 border-emerald-500/20 bg-emerald-500/5 focus:border-emerald-500/50" />
                         </div>
                     </div>
 
+                    {/* Info banner for non-admins */}
                     {!isAdmin && (
-                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex gap-3 items-center">
-                            <Clock size={18} className="text-amber-500 shrink-0" />
-                            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-tight">This entry will be sent to the Admin for approval before it becomes available for sales.</p>
+                        <div className="flex items-start gap-3 p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                            <Clock size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                            <p className="text-xs font-medium text-amber-600">
+                                This item will be sent to the Admin for approval before it's available for sale.
+                            </p>
                         </div>
                     )}
 
-                    <div className="flex gap-4 pt-4">
-                        <Button variant="outline" className="flex-1 h-14" onClick={() => setShowForm(false)}>
-                            Cancel
-                        </Button>
-                        <Button 
-                            className="flex-1 h-14" 
-                            onClick={handleSubmit} 
-                            isLoading={isSubmitting}
-                            leftIcon={Save}
-                        >
+                    <div className="flex gap-3 pt-2">
+                        <Button variant="outline" className="flex-1 h-11" onClick={() => setShowForm(false)}>Cancel</Button>
+                        <Button className="flex-1 h-11" onClick={handleSubmit} isLoading={isSubmitting} leftIcon={Save}>
                             {editingItem ? 'Save Changes' : 'Submit Stock'}
                         </Button>
                     </div>

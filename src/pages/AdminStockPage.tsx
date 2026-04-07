@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    CheckCircle2, Package, Search, AlertTriangle,
-    Trash2, RefreshCw, X, ShieldCheck, Edit3,
-    Clock
+    Package, Search, AlertTriangle, CheckCircle2,
+    X, ShieldCheck, Clock, XCircle, RefreshCw,
+    ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Skeleton } from '../components/Skeleton';
@@ -11,7 +11,14 @@ import { supabase, supabaseDataService } from '../services/supabaseService';
 import { type StockItem, type RetailSale } from '../types';
 import { Button, Modal, Input, Label, Badge } from '../components/ui';
 
-type Tab = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SALES_HISTORY' | 'OUT_OF_STOCK';
+type Tab = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SALES_HISTORY';
+
+const statusColor = (status: string) => {
+    if (status === 'APPROVED') return 'success';
+    if (status === 'PENDING_APPROVAL') return 'warning';
+    if (status === 'REJECTED') return 'danger';
+    return 'neutral';
+};
 
 export const AdminStockPage: React.FC = () => {
     const { user } = useAuth();
@@ -49,7 +56,7 @@ export const AdminStockPage: React.FC = () => {
     useEffect(() => {
         loadStock();
         loadSales();
-        const ch = supabase.channel('admin-stock-sync-refined-v1')
+        const ch = supabase.channel('admin-stock-v2')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_items' }, loadStock)
             .subscribe();
         return () => { supabase.removeChannel(ch); };
@@ -83,132 +90,171 @@ export const AdminStockPage: React.FC = () => {
     const counts = useMemo(() => ({
         PENDING_APPROVAL: items.filter(i => i.status === 'PENDING_APPROVAL').length,
         APPROVED: items.filter(i => i.status === 'APPROVED').length,
-        OUT_OF_STOCK: items.filter(i => i.status === 'OUT_OF_STOCK').length,
         REJECTED: items.filter(i => i.status === 'REJECTED').length,
     }), [items]);
 
+    const tabs: { key: Tab; label: string; count?: number }[] = [
+        { key: 'PENDING_APPROVAL', label: 'Pending', count: counts.PENDING_APPROVAL },
+        { key: 'APPROVED', label: 'Approved', count: counts.APPROVED },
+        { key: 'REJECTED', label: 'Rejected', count: counts.REJECTED },
+        { key: 'SALES_HISTORY', label: 'Sales History', count: sales.length },
+    ];
+
     return (
-        <div className="space-y-10 pb-20 animate-slide-up max-w-7xl mx-auto px-4">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row gap-6 justify-between items-center">
-                <div className="flex items-center gap-6">
-                   <div className="p-4 bg-primary/10 text-primary rounded-3xl border border-primary/20">
-                       <ShieldCheck size={32} />
-                   </div>
-                    <div>
-                        <h1 className="text-4xl font-black tracking-tight uppercase">Approvals</h1>
-                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest opacity-60">Authorize and audit farm stock entries</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-4 w-full md:w-auto">
-                    <div className="relative flex-1 md:w-80 group">
-                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                       <Input placeholder="Search records..." className="pl-12 h-14 rounded-2xl bg-card border-border/40" value={search} onChange={e => setSearch(e.target.value)} />
-                    </div>
-                </div>
-            </div>
+        <div className="min-h-screen bg-background pb-20">
+            <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
-            {/* Navigation Tabs */}
-            <div className="flex items-center gap-3 overflow-x-auto pb-4 no-scrollbar">
-                {(['PENDING_APPROVAL', 'APPROVED', 'OUT_OF_STOCK', 'REJECTED', 'SALES_HISTORY'] as const).map(t => (
-                    <button 
-                        key={t} 
-                        onClick={() => setTab(t as Tab)} 
-                        className={`
-                            flex items-center gap-3 px-6 py-3 rounded-xl whitespace-nowrap transition-all font-bold text-[10px] uppercase tracking-widest border
-                            ${tab === t ? 'bg-primary text-white border-primary shadow-glow' : 'bg-card text-muted-foreground border-border/20 hover:bg-muted/10'}
-                        `}
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
+                            <ShieldCheck size={22} />
+                        </div>
+                        <div>
+                            <h1 className="text-2xl font-bold tracking-tight">Stock Approvals</h1>
+                            <p className="text-sm text-muted-foreground">Review and approve stock submitted by inventory staff</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={loadStock}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-card border border-border/40 rounded-xl hover:bg-muted/20 transition-all"
                     >
-                        {t.replace('_', ' ')}
-                        <span className={`px-2 py-0.5 rounded-lg text-[9px] ${tab === t ? 'bg-white/20' : 'bg-muted text-muted-foreground'}`}>
-                            {t === 'SALES_HISTORY' ? sales.length : counts[t as keyof typeof counts]}
-                        </span>
+                        <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />
+                        Refresh
                     </button>
-                ))}
-            </div>
+                </div>
 
-            {/* Content Section */}
-            <div className="grid grid-cols-1 gap-6">
+                {/* Search */}
+                <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                    <input
+                        placeholder="Search by item name..."
+                        className="w-full pl-10 pr-4 h-11 rounded-xl bg-card border border-border/40 text-sm focus:outline-none focus:border-primary/50 transition-all"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+                </div>
+
+                {/* Tabs */}
+                <div className="flex gap-2 border-b border-border/30 pb-0 overflow-x-auto no-scrollbar">
+                    {tabs.map(t => (
+                        <button
+                            key={t.key}
+                            onClick={() => setTab(t.key)}
+                            className={`
+                                flex items-center gap-2 px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-all
+                                ${tab === t.key
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground'}
+                            `}
+                        >
+                            {t.label}
+                            {t.count !== undefined && (
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${tab === t.key ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>
+                                    {t.count}
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Content */}
                 {tab === 'SALES_HISTORY' ? (
                     salesLoading ? (
-                        <div className="space-y-4">
-                            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} height={100} borderRadius={24} />)}
+                        <div className="space-y-3">
+                            {[1, 2, 3].map(i => <Skeleton key={i} height={72} borderRadius={16} />)}
                         </div>
                     ) : sales.length === 0 ? (
-                        <div className="py-24 text-center bg-card/20 rounded-[40px] border border-dashed border-border/40">
-                             <Clock size={64} className="mx-auto opacity-10 mb-4" />
-                             <p className="text-sm font-bold opacity-30 uppercase tracking-widest italic">No transaction history found</p>
-                        </div>
-                    ) : sales.map(s => (
-                        <div key={s.id} className="p-8 bg-card rounded-[32px] border border-border/20 flex flex-col md:flex-row justify-between items-center gap-6 hover:border-primary/20 transition-all group">
-                            <div className="flex items-center gap-6">
-                                <div className="p-4 bg-emerald-500/10 text-emerald-600 rounded-2xl group-hover:bg-emerald-500 group-hover:text-white transition-all"><Clock size={24} /></div>
-                                <div>
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-50 mb-1">{s.receiptNumber}</p>
-                                    <h4 className="font-black text-xl tracking-tight">₦{s.totalPrice.toLocaleString()}</h4>
+                        <EmptyState icon={<Clock />} message="No sales history yet" />
+                    ) : (
+                        <div className="bg-card rounded-2xl border border-border/30 overflow-hidden divide-y divide-border/20">
+                            {sales.map(s => (
+                                <div key={s.id} className="flex items-center justify-between px-5 py-4 hover:bg-muted/10 transition-all">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-9 h-9 bg-emerald-500/10 text-emerald-600 rounded-xl flex items-center justify-center">
+                                            <Clock size={16} />
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-sm">{s.receiptNumber}</p>
+                                            <p className="text-xs text-muted-foreground">{new Date(s.createdAt).toLocaleDateString()}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-xs font-medium bg-muted px-3 py-1 rounded-lg capitalize">{s.paymentMethod}</span>
+                                        <span className="font-bold text-sm">₦{s.totalPrice.toLocaleString()}</span>
+                                        <button
+                                            onClick={() => navigate(`/admin/sales/${s.id}`)}
+                                            className="text-primary hover:underline text-xs font-semibold flex items-center gap-1"
+                                        >
+                                            View <ChevronRight size={12} />
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="flex items-center gap-8">
-                                <Badge variant="outline" className="rounded-xl p-2 px-4 uppercase text-[9px] font-bold">{s.paymentMethod}</Badge>
-                                <p className="text-[10px] font-bold opacity-30 uppercase">{new Date(s.createdAt).toLocaleDateString()}</p>
-                                <Button variant="outline" size="sm" className="rounded-xl px-6 h-10" onClick={() => navigate(`/admin/sales/${s.id}`)}>View Details</Button>
-                            </div>
+                            ))}
                         </div>
-                    ))
+                    )
                 ) : isLoading ? (
-                    <div className="space-y-8">
-                        {[1, 2, 3].map(i => <Skeleton key={i} height={250} borderRadius={40} />)}
+                    <div className="space-y-3">
+                        {[1, 2, 3].map(i => <Skeleton key={i} height={88} borderRadius={16} />)}
                     </div>
                 ) : filtered.length === 0 ? (
-                    <div className="py-32 text-center bg-card/20 rounded-[48px] border border-dashed border-border/40">
-                        <Package size={80} className="mx-auto opacity-10 mb-6" />
-                        <p className="text-sm font-bold uppercase opacity-20 tracking-widest italic">No assets found in this category</p>
-                    </div>
+                    <EmptyState icon={<Package />} message={`No ${tab.toLowerCase().replace('_', ' ')} items found`} />
                 ) : (
-                    <div className="grid grid-cols-1 gap-6">
+                    <div className="bg-card rounded-2xl border border-border/30 overflow-hidden divide-y divide-border/20">
                         {filtered.map(item => (
-                            <div key={item.id} className="bg-card rounded-[40px] border border-border/20 overflow-hidden shadow-sm hover:shadow-xl transition-all hover:border-primary/30 flex flex-col md:flex-row group">
-                                 <div className="w-full md:w-72 h-64 md:h-auto bg-slate-900 overflow-hidden relative border-r border-border/5">
-                                    {item.imageUrl ? (
-                                        <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-primary/10">
-                                            <Package size={64} />
+                            <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-4 hover:bg-muted/5 transition-all group">
+                                {/* Item info */}
+                                <div className="flex items-center gap-4 flex-1 min-w-0">
+                                    <div className="w-12 h-12 rounded-xl bg-slate-900 overflow-hidden shrink-0 border border-border/10">
+                                        {item.imageUrl
+                                            ? <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                            : <div className="w-full h-full flex items-center justify-center text-primary/20"><Package size={22} /></div>
+                                        }
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{item.name}</p>
+                                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                                            <span className="text-xs text-muted-foreground">{item.quantity} {item.unit}</span>
+                                            <span className="text-muted-foreground">·</span>
+                                            <span className="text-xs text-muted-foreground">₦{item.unitPrice.toLocaleString()} / unit</span>
+                                            <span className="text-muted-foreground">·</span>
+                                            <span className="text-xs text-muted-foreground">by {item.submittedByName || 'Staff'}</span>
                                         </div>
-                                    )}
-                                    {item.status === 'APPROVED' && (
-                                        <div className="absolute top-4 left-4 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-[9px] font-black uppercase shadow-glow">Authorized</div>
-                                    )}
-                                 </div>
-                                 <div className="flex-1 p-8 flex flex-col md:flex-row justify-between items-center gap-8">
-                                    <div className="space-y-2 flex-1 text-center md:text-left">
-                                       <h4 className="font-black text-3xl tracking-tight uppercase group-hover:text-primary transition-colors leading-none">{item.name}</h4>
-                                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-40 italic">Submitted by {item.submittedByName || 'Staff'}</p>
-                                       <div className="flex items-center justify-center md:justify-start gap-4 mt-4">
-                                            <div className="px-4 py-2 bg-muted/20 border border-border/10 rounded-xl text-[10px] font-bold uppercase tracking-widest">{item.quantity} {item.unit}</div>
-                                            <div className="px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-bold uppercase tracking-widest">₦{item.unitPrice.toLocaleString()} / Unit</div>
-                                       </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 shrink-0">
-                                        {item.status === 'PENDING_APPROVAL' && (
-                                           <>
-                                              <Button className="rounded-2xl h-14 px-8 bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/10" onClick={() => approve(item)} isLoading={acting === item.id} leftIcon={CheckCircle2}>
-                                                  Approve
-                                              </Button>
-                                              <Button variant="outline" className="rounded-2xl h-14 px-8 border-rose-500/30 text-rose-500 hover:bg-rose-500/5" onClick={() => { setRejectItem(item); setRejectNote(''); }} leftIcon={X}>
-                                                  Reject
-                                              </Button>
-                                           </>
-                                        )}
                                         {item.status === 'REJECTED' && item.rejectionComment && (
-                                            <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl max-w-xs">
-                                                <p className="text-[10px] text-rose-500 font-bold uppercase">Reason: {item.rejectionComment}</p>
-                                            </div>
+                                            <p className="text-xs text-rose-500 mt-1 font-medium">Reason: {item.rejectionComment}</p>
                                         )}
-                                        <Button variant="outline" size="icon" className="rounded-xl w-14 h-14" onClick={() => navigate(`/admin/stock/edit/${item.id}`)}><Edit3 size={20} /></Button>
-                                        <Button variant="outline" size="icon" className="rounded-xl w-14 h-14 hover:text-rose-500"><Trash2 size={20} /></Button>
                                     </div>
-                                 </div>
+                                </div>
+
+                                {/* Status + actions */}
+                                <div className="flex items-center gap-3 shrink-0 pl-16 sm:pl-0">
+                                    <Badge variant={statusColor(item.status) as any} className="text-[10px]">
+                                        {item.status.replace('_', ' ')}
+                                    </Badge>
+
+                                    {item.status === 'PENDING_APPROVAL' && (
+                                        <>
+                                            <button
+                                                onClick={() => approve(item)}
+                                                disabled={acting === item.id}
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-all active:scale-95 disabled:opacity-60 shadow-sm"
+                                            >
+                                                {acting === item.id
+                                                    ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                    : <CheckCircle2 size={14} />
+                                                }
+                                                Approve
+                                            </button>
+                                            <button
+                                                onClick={() => { setRejectItem(item); setRejectNote(''); }}
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-card border border-rose-500/30 text-rose-500 hover:bg-rose-500/10 text-xs font-bold rounded-xl transition-all active:scale-95"
+                                            >
+                                                <XCircle size={14} />
+                                                Reject
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -216,32 +262,44 @@ export const AdminStockPage: React.FC = () => {
             </div>
 
             {/* Rejection Modal */}
-            <Modal isOpen={!!rejectItem} onClose={() => setRejectItem(null)} title="Reject Stock Entry" maxWidth="md">
-                <div className="space-y-6 py-4">
-                    <div className="flex items-center gap-4 p-5 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-600">
-                        <AlertTriangle size={24} />
-                        <div>
-                            <h4 className="font-black text-xs uppercase">Verification Failure</h4>
-                            <p className="text-[10px] font-bold opacity-70">Please explain why this stock entry is being rejected</p>
-                        </div>
+            <Modal isOpen={!!rejectItem} onClose={() => setRejectItem(null)} title="Reject Stock Entry" maxWidth="sm">
+                <div className="space-y-5 py-2">
+                    <div className="flex items-start gap-3 p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-600">
+                        <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                        <p className="text-sm font-medium">
+                            You are about to reject <strong>{rejectItem?.name}</strong>. Please provide a reason so the inventory officer can fix and resubmit.
+                        </p>
                     </div>
-                    <div className="space-y-2">
-                        <Label>Rejection Comment</Label>
-                        <Input 
-                            value={rejectNote} 
-                            onChange={e => setRejectNote(e.target.value)} 
-                            placeholder="e.g. Inconsistent quantity, poor photo quality..." 
-                            className="h-14"
+                    <div className="space-y-1.5">
+                        <Label>Reason for rejection</Label>
+                        <Input
+                            value={rejectNote}
+                            onChange={e => setRejectNote(e.target.value)}
+                            placeholder="e.g. Wrong quantity, unclear photo..."
+                            className="h-12"
                         />
                     </div>
-                    <div className="flex gap-4 pt-4">
-                        <Button variant="outline" className="flex-1 h-14" onClick={() => setRejectItem(null)}>Cancel</Button>
-                        <Button className="flex-1 h-14 bg-rose-500" onClick={confirmReject} isLoading={acting === rejectItem?.id}>Confirm Rejection</Button>
+                    <div className="flex gap-3 pt-2">
+                        <Button variant="outline" className="flex-1 h-11" onClick={() => setRejectItem(null)}>Cancel</Button>
+                        <Button
+                            className="flex-1 h-11 bg-rose-500 hover:bg-rose-600"
+                            onClick={confirmReject}
+                            isLoading={acting === rejectItem?.id}
+                        >
+                            Confirm Rejection
+                        </Button>
                     </div>
                 </div>
             </Modal>
         </div>
     );
 };
+
+const EmptyState: React.FC<{ icon: React.ReactNode; message: string }> = ({ icon, message }) => (
+    <div className="py-20 flex flex-col items-center justify-center text-center gap-3 bg-card/30 rounded-2xl border border-dashed border-border/30">
+        <div className="w-12 h-12 text-muted-foreground/20 [&>svg]:w-full [&>svg]:h-full">{icon}</div>
+        <p className="text-sm font-medium text-muted-foreground/50">{message}</p>
+    </div>
+);
 
 export default AdminStockPage;
