@@ -128,8 +128,8 @@ export const SalesPage: React.FC = () => {
                         <X size={24} />
                     </button>
                     <div className="flex-1">
-                        <h1 className="text-3xl font-black tracking-tighter uppercase leading-none mb-1">POS <span className="text-primary italic">Terminal</span></h1>
-                        <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-widest opacity-40 italic">Inventory disbursement system</p>
+                        <h1 className="text-3xl font-black tracking-tight uppercase leading-none mb-1">Sales <span className="text-primary italic">Point</span></h1>
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest opacity-60">Sell farm products directly to customers</p>
                     </div>
                     <div className="flex items-center gap-4 w-full sm:w-auto">
                         <div className="relative flex-1 sm:w-72 group">

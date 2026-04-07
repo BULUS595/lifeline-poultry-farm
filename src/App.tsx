@@ -8,19 +8,19 @@ import { DashboardLayout } from './layouts/DashboardLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Lazy loading all pages
-import { SalesPage } from './pages/SalesPage';
-import { SalesRecordsPage } from './pages/SalesRecordsPage';
-import { StoragePage } from './pages/StoragePage';
+import SalesPage from './pages/SalesPage';
+import SalesRecordsPage from './pages/SalesRecordsPage';
+import StoragePage from './pages/StoragePage';
 import { AdminStockPage } from './pages/AdminStockPage';
-import { LoginPage } from './pages/LoginPage';
-const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
-const MortalityPage = lazy(() => import('./pages/Mortality/MortalityPage').then(m => ({ default: m.MortalityPage })));
-const FeedingLogsPage = lazy(() => import('./pages/FeedingLogsPage').then(m => ({ default: m.FeedingLogsPage })));
-const ExpensesPage = lazy(() => import('./pages/ExpensesPage').then(m => ({ default: m.ExpensesPage })));
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
-const UserManagementPage = lazy(() => import('./pages/UserManagementPage').then(m => ({ default: m.UserManagementPage })));
-const ActivityLogsPage = lazy(() => import('./pages/ActivityLogsPage').then(m => ({ default: m.ActivityLogsPage })));
-const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
+import LoginPage from './pages/LoginPage';
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const MortalityPage = lazy(() => import('./pages/Mortality/MortalityPage'));
+const FeedingLogsPage = lazy(() => import('./pages/FeedingLogsPage'));
+const ExpensesPage = lazy(() => import('./pages/ExpensesPage'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
+const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
+const ActivityLogsPage = lazy(() => import('./pages/ActivityLogsPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 
 const PageLoader = () => (
   <div className="flex flex-col items-center justify-center min-h-screen bg-background">
